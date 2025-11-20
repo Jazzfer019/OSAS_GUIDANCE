@@ -1,110 +1,105 @@
-from flask import Flask, render_template, request, redirect, session
-from flask_bcrypt import Bcrypt
-import mysql.connector
+from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
+import hashlib
 
 app = Flask(__name__)
-app.secret_key = "yoursecretkey"
-bcrypt = Bcrypt(app)
+CORS(app)
 
-# MySQL connection
-db = mysql.connector.connect(
-    host="localhost",
-    user="root",
-    password="",
-    database="myapp"
-)
-cursor = db.cursor()
+# MySQL configuration
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root:@localhost/cvsu_db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# --------------------------
-# MAIN LANDING PAGE
-# --------------------------
-@app.route('/')
-def home():
-    return render_template("index.html")
+db = SQLAlchemy(app)
 
+# ------------------
+# Models
+# ------------------
 
-# --------------------------
-# ADMIN LOGIN
-# --------------------------
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+# Student model
+class Student(db.Model):
+    __tablename__ = 'students'
+    id = db.Column(db.Integer, primary_key=True)
+    student_number = db.Column(db.String(20), unique=True, nullable=False)
+    student_name = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(100), unique=True, nullable=False)
+    password = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
 
-        cursor.execute("SELECT * FROM users WHERE username=%s", (username,))
-        user = cursor.fetchone()
+# Admin model
+class Admin(db.Model):
+    __tablename__ = 'admin_tbl'
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(100), unique=True, nullable=False)
+    password = db.Column(db.String(255), nullable=False)
 
-        if user and bcrypt.check_password_hash(user[2], password):
-            session['user'] = username
-            return redirect('/dashboard')
-        else:
-            return "Invalid Credentials"
+# Initialize tables
+with app.app_context():
+    db.create_all()
 
-    return render_template('login.html')
+# ------------------
+# Helper function to verify password
+# ------------------
+def verify_password(stored_password, input_password):
+    """
+    Verify if the input password matches the stored password.
+    Supports plain-text and SHA-256 hashed passwords.
+    """
+    # If stored password length is 64, assume SHA-256 hash
+    if len(stored_password) == 64 and all(c in "0123456789abcdef" for c in stored_password.lower()):
+        return hashlib.sha256(input_password.encode()).hexdigest() == stored_password
+    # Otherwise, plain-text comparison
+    return stored_password == input_password
 
+# ------------------
+# Routes
+# ------------------
 
-@app.route('/dashboard')
-def dashboard():
-    if 'user' not in session:
-        return redirect('/login')
-    return f"Welcome {session['user']}!"
-
-
-# --------------------------
-# STUDENT LANDING PAGE
-# --------------------------
-@app.route('/student')
-def student_portal():
-    return render_template("student_index.html")
-
-
-# --------------------------
-# STUDENT REGISTER
-# --------------------------
-@app.route('/student-register', methods=['GET', 'POST'])
-def student_register():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = bcrypt.generate_password_hash(
-            request.form['password']
-        ).decode('utf-8')
-
-        cursor.execute(
-            "INSERT INTO users (username, password) VALUES (%s, %s)",
-            (username, password)
-        )
-        db.commit()
-
-        return "Student registered successfully!"
-    return render_template('student_register.html')
-
-
-# --------------------------
-# STUDENT LOGIN
-# --------------------------
-@app.route('/student-login', methods=['GET', 'POST'])
+# Student login
+@app.route('/login', methods=['POST'])
 def student_login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+    data = request.json
+    student_number = data.get('student_number')
+    password = data.get('password')
 
-        cursor.execute(
-            "SELECT * FROM users WHERE username=%s", (username,)
-        )
-        user = cursor.fetchone()
+    if not student_number or not password:
+        return jsonify({'message': 'All fields are required'}), 400
 
-        if user and bcrypt.check_password_hash(user[2], password):
-            session['student'] = username
-            return "Student Logged In!"
-        else:
-            return "Invalid student credentials."
+    student = Student.query.filter_by(student_number=student_number).first()
+    if not student or not verify_password(student.password, password):
+        return jsonify({'message': 'Invalid credentials'}), 401
 
-    return render_template('student_login.html')
+    return jsonify({
+        'message': 'Student login successful',
+        'student': {
+            'id': student.id,
+            'student_number': student.student_number,
+            'student_name': student.student_name,
+            'email': student.email
+        }
+    }), 200
 
+# Admin login
+@app.route('/admin/login', methods=['POST'])
+def admin_login():
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
 
-# --------------------------
-# RUN THE APP
-# --------------------------
-if __name__ == "__main__":
+    if not email or not password:
+        return jsonify({'message': 'Email and password are required'}), 400
+
+    admin = Admin.query.filter_by(email=email).first()
+    if not admin or not verify_password(admin.password, password):
+        return jsonify({'message': 'Invalid admin credentials'}), 401
+
+    return jsonify({
+        'message': 'Admin login successful',
+        'admin': {
+            'id': admin.id,
+            'email': admin.email
+        }
+    }), 200
+
+if __name__ == '__main__':
     app.run(debug=True)
