@@ -79,6 +79,39 @@ def student_login():
         }
     }), 200
 
+@app.route('/register', methods=['POST'])
+def student_register():
+    data = request.json
+    student_number = data.get('student_number')
+    student_name = data.get('student_name')
+    email = data.get('email')
+    password = data.get('password')
+
+    # Check for missing fields
+    if not student_number or not student_name or not email or not password:
+        return jsonify({'message': 'All fields are required'}), 400
+
+    # Check if student_number or email already exists
+    if Student.query.filter_by(student_number=student_number).first():
+        return jsonify({'message': 'Student number already exists'}), 409
+    if Student.query.filter_by(email=email).first():
+        return jsonify({'message': 'Email already exists'}), 409
+
+    # Optionally hash password
+    hashed_password = hashlib.sha256(password.encode()).hexdigest()
+
+    # Create new student
+    new_student = Student(
+        student_number=student_number,
+        student_name=student_name,
+        email=email,
+        password=hashed_password
+    )
+    db.session.add(new_student)
+    db.session.commit()
+
+    return jsonify({'message': 'Registration successful'}), 201
+
 # Admin login
 @app.route('/admin/login', methods=['POST'])
 def admin_login():
