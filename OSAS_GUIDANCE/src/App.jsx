@@ -6,6 +6,7 @@ import AdminLogin from "./frontend/adminlogin";
 import AdminLogin2 from "./frontend/adminlogin2"; 
 import StudentRegister from "./frontend/studentregister"; 
 import StudentLogin from "./frontend/studentlogin"; 
+import AdminHome from "./frontend/homepage/admin_homepage"; 
 
 export default function App() {
   return (
@@ -22,7 +23,11 @@ export default function App() {
         {/* Admin Login Page */}
         <Route path="/admin-login" element={<AdminLogin />} />
         <Route path="/admin-login2" element={<AdminLogin2 />} />
+
+           {/* HomePages */}
+           <Route path="/admin_home" element={<AdminHome />} />
       </Routes>
+           
     </Router>
   );
 }
