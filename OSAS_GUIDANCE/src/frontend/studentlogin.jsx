@@ -64,7 +64,7 @@ export default function StudentLogin() {
           text: data.message,
           confirmButtonColor: "#22c55e",
         }).then(() => {
-          navigate("/student_home");
+          navigate("/student_homepage");
         });
       } else if (res.status === 401) {
         Swal.fire({
