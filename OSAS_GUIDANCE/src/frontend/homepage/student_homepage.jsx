@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import {DocumentTextIcon, ChatBubbleBottomCenterTextIcon, NewspaperIcon, ArrowRightOnRectangleIcon, MagnifyingGlassIcon,} from "@heroicons/react/24/solid";
 import Swal from "sweetalert2";
 
-export default function AdminHome() {
+export default function StudentHome() {
   const [activePage, setActivePage] = useState("records");
   const [query, setQuery] = useState("");
 
@@ -53,7 +53,7 @@ export default function AdminHome() {
           />
           <div>
             <h1 className="text-lg font-semibold tracking-wide">GUIDANCE OFFICE</h1>
-            <p className="text-xs text-gray-300">CvSU — Admin</p>
+            <p className="text-xs text-gray-300">CvSU — Student</p>
           </div>
         </div>
 

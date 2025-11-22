@@ -56,7 +56,7 @@ export default function AdminLogin2() {
           text: data.message,
           confirmButtonColor: "#22c55e",
         }).then(() => {
-          navigate("/admin_home"); // redirect to admin dashboard/home
+          navigate("/admin_homepage"); // redirect to admin dashboard/home
         });
       } else if (res.status === 401) {
         Swal.fire({

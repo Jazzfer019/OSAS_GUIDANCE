@@ -79,6 +79,7 @@ def student_login():
         }
     }), 200
 
+#Student Register
 @app.route('/register', methods=['POST'])
 def student_register():
     data = request.json
