@@ -147,7 +147,25 @@ export default function AdminHome() {
     return;
   }
 // Convert YYYY-MM-DD → MM/DD/YY
-const parts = violationDate.split("-"); // ["YYYY", "MM", "DD"]
+if (!violationDate) {
+  Swal.fire({
+    icon: "warning",
+    title: "Missing Date",
+    text: "Please select a valid date.",
+  });
+  return;
+}
+
+const parts = violationDate.split("-");
+if (parts.length !== 3) {
+  Swal.fire({
+    icon: "error",
+    title: "Invalid Date",
+    text: "Please enter date in YYYY-MM-DD format.",
+  });
+  return;
+}
+
 const formattedDate = `${parts[1]}/${parts[2]}/${parts[0].slice(2)}`; // "MM/DD/YY"
 
 const newViolation = {
@@ -570,12 +588,13 @@ const newViolation = {
                       {/* Date (auto-filled to current date) */}
                       <div className="mb-6">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                        <input
+                       <input
                           type="date"
-                          value={violationDate || new Date().toISOString().split("T")[0]}
+                          value={violationDate}
+                           className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                           onChange={(e) => setViolationDate(e.target.value)}
-                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                         />
+
                       </div>
 
                       {/* Buttons */}
