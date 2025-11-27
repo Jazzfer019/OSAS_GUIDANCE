@@ -454,7 +454,7 @@ async function handleSubmitViolation() {
         <div></div>
 
       {/* USER ICON (TOP RIGHT) */}
-  <div className="relative">+
+  <div className="relative">
 
   {user.profile_pic && user.profile_pic !== "default.png" ? (
     <img
