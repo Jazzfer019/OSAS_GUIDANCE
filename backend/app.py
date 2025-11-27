@@ -4,6 +4,10 @@ from flask_cors import CORS
 
 db = SQLAlchemy()
 
+UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
 def create_app():
     app = Flask(__name__)
     CORS(app)
@@ -17,6 +21,7 @@ def create_app():
     with app.app_context():
         from models import Student, Admin, Violation
         db.create_all()
+
 
     # --------------------------------
     # 👉 IMPORT ROUTES HERE
@@ -39,6 +44,16 @@ def create_app():
     return app
 
 
+# ==========================
+# RUN SERVER
+# ==========================
 if __name__ == "__main__":
-    app = create_app()
+    # Ensure default.png exists in uploads folder
+    default_path = os.path.join(app.config['UPLOAD_FOLDER'], "default.png")
+    if not os.path.exists(default_path):
+        from PIL import Image, ImageDraw
+        img = Image.new('RGB', (150, 150), color = 'gray')
+        d = ImageDraw.Draw(img)
+        d.text((45,65), "Admin", fill=(255,255,255))
+        img.save(default_path)
     app.run(debug=True)

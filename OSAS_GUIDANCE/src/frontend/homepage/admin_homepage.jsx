@@ -6,6 +6,7 @@ import {
   PencilSquareIcon,
   ArrowRightOnRectangleIcon,
   UserCircleIcon,
+  DocumentPlusIcon,
 } from "@heroicons/react/24/solid";
 import Swal from "sweetalert2";
 import {
@@ -18,13 +19,14 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-
-
 export default function AdminHome() {
   const [activePage, setActivePage] = useState("trends");
   const [query, setQuery] = useState("");
   const [rssItems, setRssItems] = useState([]);
   const [loadingRss, setLoadingRss] = useState(false);
+  // Upload File State
+const [currentGoodMoral, setCurrentGoodMoral] = useState(null);
+const [currentRules, setCurrentRules] = useState(null);
 
   // Violation form state
   const [studentName, setStudentName] = useState("");
@@ -46,7 +48,19 @@ export default function AdminHome() {
 
   // Store violations fetched from backend
   const [violations, setViolations] = useState([]);
+  //dropdown
+  const [showAccountDropdown, setShowAccountDropdown] = useState(false);
+  const [profilePic, setProfilePic] = useState(null);
 
+useEffect(() => {
+  const handleClickOutside = (e) => {
+    if (!e.target.closest("header")) {
+      setShowAccountDropdown(false);
+    }
+  };
+  document.addEventListener("click", handleClickOutside);
+  return () => document.removeEventListener("click", handleClickOutside);
+}, []);
   
 
   // Sample chart data (you can later map real data)
@@ -59,15 +73,116 @@ export default function AdminHome() {
     { month: "Jun", cases: 0 },
   ];
 
-  
+  //email
+const [profilePicPreview, setProfilePicPreview] = useState(null);
+const [user, setUser] = useState({ name: "", email: "", profile_pic:"" });
+
+useEffect(() => {
+  async function fetchUser() {
+    try {
+      const res = await fetch("http://localhost:5000/admin/me?id=1"); // palitan id kung testing
+      if (!res.ok) throw new Error("Failed to fetch user info");
+      const data = await res.json();
+      setUser({
+        id: data.id,
+        name: data.name || "Admin",
+        email: data.email || "",
+        profile_pic: data.profile_pic || null,
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  fetchUser();
+}, []);
+
+async function handleDeleteViolation(v) {
+  // Confirmation modal (center)
+  Swal.fire({
+    title: "Delete Violation",
+    text: `Are you sure you want to delete the violation for ${v.student_name}?`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Yes, delete",
+    cancelButtonText: "Cancel",
+    confirmButtonColor: "#d33",
+    cancelButtonColor: "#16a34a",
+  }).then(async (result) => {
+    if (result.isConfirmed) {
+      try {
+        const res = await fetch(`http://localhost:5000/violations/${v.id}`, {
+          method: "DELETE",
+        });
+
+        if (res.ok) {
+          // Show success toast in top-right
+          Swal.fire({
+            toast: true,
+            position: "top-end",
+            icon: "success",
+            title: "Violation deleted successfully",
+            showConfirmButton: false,
+            timer: 1500,
+            timerProgressBar: true,
+          });
+
+          // Remove from state immediately
+          setViolations((prev) => prev.filter((vi) => vi.id !== v.id));
+        } else {
+          const data = await res.json();
+          Swal.fire({
+            icon: "error",
+            title: "Error",
+            text: data?.message || "Delete failed",
+          });
+        }
+      } catch (err) {
+        console.error(err);
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: "Failed to delete violation",
+        });
+      }
+    }
+  });
+}
+
+
+
+
+const handlePreviewFile = (file) => {
+    const ext = file.name.split(".").pop().toLowerCase();
+    if (ext === "pdf" || ["jpg","jpeg","png"].includes(ext)) {
+      setPreviewFile(file); // opens modal below
+    } else if (ext === "doc" || ext === "docx") {
+      Swal.fire({
+        icon: "info",
+        title: "Preview not available",
+        text: "DOC/DOCX files cannot be previewed. You can download them instead.",
+        confirmButtonText: "Download",
+      }).then(() => {
+        const url = URL.createObjectURL(file);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = file.name;
+        link.click();
+        URL.revokeObjectURL(url);
+      });
+    }
+  };
+
+  const closePreview = () => setPreviewFile(null);
+  const [previewFile, setPreviewFile] = useState(null);
 
   const menuItems = [
     { id: "trends", label: "View Trends", icon: ChartBarIcon },
     { id: "news", label: "News Management", icon: NewspaperIcon },
     { id: "search", label: "Search Student", icon: MagnifyingGlassIcon },
     { id: "violation", label: "Encode Violation", icon: PencilSquareIcon },
+    { id: "uploadFileFormat", label: "Upload File Format", icon: DocumentPlusIcon }, // updated icon
   ];
-
   // ------------------ Fetch News ------------------
   useEffect(() => {
     if (activePage === "news") fetchRss();
@@ -129,8 +244,8 @@ export default function AdminHome() {
     });
   }
 
-  // ------------------ Submit Violation ------------------
-  async function handleSubmitViolation() {
+// ------------------ Submit Violation ------------------
+async function handleSubmitViolation() {
   if (
     !studentName ||
     !studentId ||
@@ -146,36 +261,28 @@ export default function AdminHome() {
     });
     return;
   }
-// Convert YYYY-MM-DD → MM/DD/YY
-if (!violationDate) {
-  Swal.fire({
-    icon: "warning",
-    title: "Missing Date",
-    text: "Please select a valid date.",
-  });
-  return;
-}
 
-const parts = violationDate.split("-");
-if (parts.length !== 3) {
-  Swal.fire({
-    icon: "error",
-    title: "Invalid Date",
-    text: "Please enter date in YYYY-MM-DD format.",
-  });
-  return;
-}
+  // Convert YYYY-MM-DD → MM/DD/YY
+  const parts = violationDate.split("-");
+  if (parts.length !== 3) {
+    Swal.fire({
+      icon: "error",
+      title: "Invalid Date",
+      text: "Please enter date in YYYY-MM-DD format.",
+    });
+    return;
+  }
 
-const formattedDate = `${parts[1]}/${parts[2]}/${parts[0].slice(2)}`; // "MM/DD/YY"
+  const formattedDate = `${parts[1]}/${parts[2]}/${parts[0].slice(2)}`; // "MM/DD/YY"
 
-const newViolation = {
-  student_name: studentName,
-  student_id: parseInt(studentId, 10),
-  course_year_section: courseYearSection,
-  gender,
-  violation_text: violationText,
-  violation_date: formattedDate,
-};
+  const newViolation = {
+    student_name: studentName,
+    student_id: parseInt(studentId, 10),
+    course_year_section: courseYearSection,
+    gender,
+    violation_text: violationText,
+    violation_date: formattedDate,
+  };
 
   try {
     const res = await fetch("http://localhost:5000/violations", {
@@ -184,16 +291,21 @@ const newViolation = {
       body: JSON.stringify(newViolation),
     });
     const data = await res.json();
+
     if (res.ok) {
+      // ✅ Top-right toast
       Swal.fire({
+        toast: true,
+        position: "top-end",
         icon: "success",
-        title: "Submitted",
-        text: "Violation record submitted successfully.",
-        timer: 1500,
+        title: "Violation submitted successfully",
         showConfirmButton: false,
+        timer: 1500,
+        timerProgressBar: true,
       });
+
       setShowViolationModal(false);
-      // reset
+      // reset fields
       setStudentName("");
       setStudentId("");
       setCourseYearSection("");
@@ -201,9 +313,14 @@ const newViolation = {
       setViolationText("");
       setViolationDate("");
       setStudentInfo(null);
+
       await fetchViolations(); // refresh list
     } else {
-      Swal.fire({ icon: "error", title: "Error", text: data?.message || "Submission failed." });
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: data?.message || "Submission failed.",
+      });
     }
   } catch (err) {
     console.error(err);
@@ -330,20 +447,119 @@ const newViolation = {
           </button>
         </div>
       </aside>
+ 
+     <main className="flex-1 flex flex-col">
+     {/* Updated Header with Account Dropdown */}
+      <header className="w-full h-16 bg-[#1f2937] text-white shadow-md flex items-center justify-between px-6 relative">
+        <div></div>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col">
-        <header className="w-full h-16 bg-[#1f2937] text-white shadow-md flex items-center justify-between px-6">
-          <div></div>
-          <UserCircleIcon className="w-10 h-10 text-gray-300" />
+      {/* USER ICON (TOP RIGHT) */}
+  <div className="relative">+
+
+  {user.profile_pic && user.profile_pic !== "default.png" ? (
+    <img
+      src={
+        typeof user.profile_pic === "string"
+          ? user.profile_pic
+          : URL.createObjectURL(user.profile_pic)
+        }
+      alt="Profile"
+      className="w-10 h-10 rounded-full object-cover cursor-pointer"
+      onClick={() => setShowAccountDropdown((prev) => !prev)}
+      onError={(e) => {
+        e.target.src = ""; // clear broken image
+        setUser((prev) => ({ ...prev, profile_pic: null })); // fallback to icon
+      }}
+    />
+  ) : (
+    <UserCircleIcon
+      className="w-10 h-10 text-gray-300 cursor-pointer"
+      onClick={() => setShowAccountDropdown((prev) => !prev)}
+    />
+  )}
+
+  {/* DROPDOWN */}
+  {showAccountDropdown && (
+    <div
+      id="account-dropdown"
+      className="absolute right-0 mt-2 w-64 bg-[#1f2937] text-white rounded-xl shadow-lg overflow-hidden z-50"
+    >
+      <div className="p-4 flex flex-col items-center space-y-2">
+
+        {/* DROPDOWN PROFILE PREVIEW */}
+        <div className="relative">
+          {profilePicPreview ||
+          (user.profile_pic && user.profile_pic !== "default.png") ? (
+            <img
+              src={
+                profilePicPreview ||
+                (typeof user.profile_pic === "string"
+                  ? user.profile_pic
+                  : URL.createObjectURL(user.profile_pic))
+              }
+              alt="Profile"
+              className="rounded-full w-16 h-16 object-cover"
+              onError={(e) => {
+                e.target.src = "";
+                setUser((prev) => ({ ...prev, profile_pic: null }));
+              }}
+            />
+          ) : (
+            <UserCircleIcon className="w-16 h-16 text-gray-400" />
+          )}
+
+          {/* UPLOAD BUTTON */}
+          <label className="absolute bottom-0 right-0 w-6 h-6 bg-green-600 rounded-full flex items-center justify-center cursor-pointer hover:bg-green-700 border-2 border-white">
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                setProfilePicPreview(URL.createObjectURL(file));
+
+                const formData = new FormData();
+                formData.append("profile_pic", file);
+                formData.append("id", user.id);
+
+                try {
+                  const res = await fetch(
+                    "http://localhost:5000/admin/upload_profile",
+                    { method: "POST", body: formData }
+                  );
+
+                  const data = await res.json();
+                  if (res.ok) {
+                    setUser((prev) => ({
+                      ...prev,
+                      profile_pic: data.profile_pic,
+                    }));
+                  }
+                } catch (err) {
+                  console.error("Upload error:", err);
+                }
+              }}
+            />
+            <span className="text-white text-sm font-bold">+</span>
+          </label>
+        </div>
+            {/* Email */}
+            <p className="font-bold">Hi, Admin!</p>
+            <p className="text-sm text-gray-300">{user.email}</p>
+          </div>
+          </div>
+                )}
+          </div>
         </header>
-
         <section className="p-8 overflow-auto h-[calc(100vh-4rem)]">
           <h2 className="text-3xl font-bold text-gray-700 mb-6">
             {activePage === "trends" && "Behavioral Trends"}
             {activePage === "news" && "News Management"}
             {activePage === "search" && "Search Students"}
             {activePage === "violation" && "Encode Violation (NLP)"}
+            {activePage === "uploadFileFormat" && "Upload File Format"}
           </h2>
 
           {/* Trends */}
@@ -391,92 +607,130 @@ const newViolation = {
             </div>
           )}
 
-        {/* Search Students */}
-{activePage === "search" && (
-  <div className="space-y-6">
-    <div className="relative w-full max-w-xl">
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search student by name or ID..."
-        className="w-full pl-4 pr-4 py-2 bg-white text-gray-800 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-      />
-    </div>
+      {/* Search Students */}
+        {activePage === "search" && (
+          <div className="space-y-6">
+            
+            {/* Search Input */}
+            <div className="relative w-full max-w-xl">
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search student by name or ID..."
+                className="w-full pl-4 pr-4 py-2 bg-white text-gray-800 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
 
-    <div className="bg-white shadow rounded-lg overflow-hidden">
-      <table className="w-full text-left">
-        <thead className="bg-gray-200 text-gray-700">
-          <tr>
-            <th className="py-3 px-4">Student ID</th>
-            <th className="py-3 px-4">Student Name</th>
-            <th className="py-3 px-4">Gender</th>
-            <th className="py-3 px-4">Course/Year/Section</th>
-            <th className="py-3 px-4">Violation</th>
-            <th className="py-3 px-4">Date</th>
-            <th className="py-3 px-4">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(() => {
-            const filtered = violations.filter((v) => {
-              if (!query) return true;
-              const q = query.toLowerCase();
-              return (
-                (v.student_name || "").toLowerCase().includes(q) ||
-                String(v.student_id || "").includes(q) ||
-                (v.violation_text || "").toLowerCase().includes(q)
-              );
-            });
+            {/* TABLE */}
+            <div className="bg-white shadow rounded-lg overflow-hidden">
+              <table className="w-full text-left">
 
-            if (filtered.length === 0) {
-              return (
-                <tr>
-                  <td colSpan="7" className="text-center py-6 text-gray-500">
-                    No results found. Type to search...
-                  </td>
-                </tr>
-              );
-            }
+                {/* TABLE HEADERS */}
+                <thead className="bg-gray-200 text-gray-700">
+                  <tr>
+                    <th className="py-3 px-4">Student ID</th>
+                    <th className="py-3 px-4">Student Name</th>
+                    <th className="py-3 px-4">Gender</th>
+                    <th className="py-3 px-4">Course/Year/Section</th>
+                    <th className="py-3 px-20">Description</th>
+                    <th className="py-3 px-4">Section</th>
+                    <th className="py-3 px-4">Violation</th>
+                    <th className="py-3 px-4">Date</th>
+                    <th className="py-3 px-10">Actions</th>
+                  </tr>
+                </thead>
 
-            const formatDate = (dateStr) => {
-              if (!dateStr) return "";
-              const date = new Date(dateStr);
-              const mm = String(date.getMonth() + 1).padStart(2, "0");
-              const dd = String(date.getDate()).padStart(2, "0");
-              const yy = String(date.getFullYear()).slice(-2);
-              return `${mm}/${dd}/${yy}`;
-            };
+                {/* TABLE BODY */}
+                <tbody>
+                  {(() => {
+                    const filtered = violations.filter((v) => {
+                      if (!query) return true;
+                      const q = query.toLowerCase();
+                      return (
+                        (v.student_name || "").toLowerCase().includes(q) ||
+                        String(v.student_id || "").includes(q) ||
+                        (v.violation_text || "").toLowerCase().includes(q)
+                      );
+                    });
 
-            return filtered.map((v, idx) => (
-              <tr key={idx} className="border-b last:border-b-0">
-                <td className="py-3 px-4">{v.student_id}</td>
-                <td className="py-3 px-4">{v.student_name}</td>
-                <td className="py-3 px-4">{v.gender}</td>
-                <td className="py-3 px-4">{v.course_year_section}</td>
-                <td className="py-3 px-4">
-                  <div className="max-w-xl truncate">{v.violation_text}</div>
-                </td>
-                <td className="py-3 px-4">{formatDate(v.violation_date)}</td>
-                <td className="py-3 px-4">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => viewStudentInfo(v)}
-                      className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
-                    >
-                      View
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ));
-          })()}
-        </tbody>
-      </table>
-    </div>
-  </div>
-)}
+                    if (filtered.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan="9" className="text-center py-6 text-gray-500">
+                            No results found. Type to search...
+                          </td>
+                        </tr>
+                      );
+                    }
 
+                    const formatDate = (dateStr) => {
+                      if (!dateStr) return "";
+                      const date = new Date(dateStr);
+                      const mm = String(date.getMonth() + 1).padStart(2, "0");
+                      const dd = String(date.getDate()).padStart(2, "0");
+                      const yy = String(date.getFullYear()).slice(-2);
+                      return `${mm}/${dd}/${yy}`;
+                    };
+
+                    return filtered.map((v, idx) => (
+                      <tr key={idx} className="border-b last:border-b-0">
+
+                        {/* Student ID */}
+                        <td className="py-3 px-4">{v.student_id}</td>
+
+                        {/* Name */}
+                        <td className="py-3 px-4">{v.student_name}</td>
+
+                        {/* Gender */}
+                        <td className="py-3 px-4">{v.gender}</td>
+
+                        {/* Course / Year / Section */}
+                        <td className="py-3 px-4">{v.course_year_section}</td>
+                        
+                        {/* Violation Text */}
+                      <td className="py-3 px-20 max-w-xs">
+                        <span className="block truncate">
+                          {v.violation_text.length > 15
+                            ? v.violation_text.slice(0, 15) + "..."
+                            : v.violation_text}
+                        </span>
+                      </td>
+                        {/* SECTION — empty */}
+                        <td className="py-3 px-4"></td>
+
+                        {/* VIOLATION — empty */}
+                        <td className="py-3 px-4"></td>
+
+                        {/* DATE */}
+                        <td className="py-3 px-1">{formatDate(v.violation_date)}</td>
+
+                        {/* ACTION BUTTON */}
+                        <td className="py-3 px-4">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => viewStudentInfo(v)}
+                              className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
+                            >
+                              View
+                            </button>
+                               <button
+                                  onClick={() => handleDeleteViolation(v)}
+                                  className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                                >
+                                  Delete
+                             </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ));
+                  })()}
+                </tbody>
+
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Encode Violation Section */}
         {activePage === "violation" && (
@@ -490,6 +744,8 @@ const newViolation = {
                 Encode New Violation
               </button>
             </div>
+
+            
           {/* Violation Modal */}
             {showViolationModal && (
               <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -619,123 +875,331 @@ const newViolation = {
                   </div>
                 )}
 
-                {/* Violation Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {violations.length === 0 ? (
-                    <p className="text-gray-500 col-span-full">No violation records yet.</p>
-                  ) : (
-                    violations.map((v, idx) => {
-  // Format violation date to MM/DD/YY
-  const date = new Date(v.violation_date);
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  const yy = String(date.getFullYear()).slice(-2);
-  const formattedDate = `${mm}/${dd}/${yy}`;
+              {/* Violation Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {violations.length === 0 ? (
+              <p className="text-gray-500 col-span-full">No violation records yet.</p>
+            ) : (
+              violations.map((v, idx) => {
+                // Format violation date to MM/DD/YY
+                const date = new Date(v.violation_date);
+                const mm = String(date.getMonth() + 1).padStart(2, "0");
+                const dd = String(date.getDate()).padStart(2, "0");
+                const yy = String(date.getFullYear()).slice(-2);
+                const formattedDate = `${mm}/${dd}/${yy}`;
 
-  return (
-    <div
-      key={idx}
-      className="bg-white p-5 rounded-xl shadow-lg hover:shadow-xl transition-shadow cursor-pointer"
-      onClick={() => viewStudentInfo(v)}
-    >
-      <p className="font-semibold text-gray-700 text-lg mb-2">
-        {v.student_name} (ID: {v.student_id})
-      </p>
-      <p className="text-gray-600 mb-1">Gender: {v.gender}</p>
-      <p className="text-gray-600 mb-1">CYS: {v.course_year_section}</p>
-      <p className="text-gray-600 mb-2">Violation: {v.violation_text}</p>
-      <p className="text-sm text-gray-400">Date: {formattedDate}</p>
-    </div>
-  );
-})
+                return (
+                  <div
+                    key={idx}
+                    className="bg-white p-5 rounded-xl shadow-lg hover:shadow-xl transition-shadow cursor-pointer"
+                    onClick={() => viewStudentInfo(v)}
+                  >
+                    <p className="font-semibold text-gray-700 text-lg mb-2">
+                      {v.student_name} (ID: {v.student_id})
+                    </p>
+                    <p className="text-gray-600 mb-1">Gender: {v.gender}</p>
+                    <p className="text-gray-600 mb-1">CYS: {v.course_year_section}</p>
+
+                    {/* DESCRIPTION (truncated to prevent overflow) */}
+                    <p className="text-gray-600 mb-1 truncate max-w-full" title={v.violation_text}>
+                      Description: {v.violation_text}
+                    </p>
+
+                    {/* SECTION */}
+                    <p className="text-gray-600 mb-1">Section: {v.section || "—"}</p>
+
+                    {/* VIOLATION */}
+                    <p className="text-gray-600 mb-2">Violation: {v.violation || "—"}</p>
+
+                    <p className="text-sm text-gray-400">Date: {formattedDate}</p>
+                  </div>
+                );
+              })
+            )}
+          </div>
+             </div>
+                     )}
+
+                  {/* Student Info Modal (from Search -> View) */}
+                  {showStudentModal && selectedStudent && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                      <div className="bg-white w-full max-w-2xl rounded-xl shadow-xl p-6 relative">
+                        
+                        {/* CLOSE BUTTON */}
+                        <button
+                          onClick={() => {
+                            setShowStudentModal(false);
+                            setSelectedStudent(null);
+                          }}
+                          className="absolute top-4 right-4 text-gray-600 hover:text-black"
+                        >
+                          ✕
+                        </button>
+
+                        {/* TITLE */}
+                        <h2 className="text-2xl font-bold text-gray-700 mb-4">Student Information</h2>
+
+                        {/* BASIC STUDENT INFO */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-500">ID</p>
+                            <p className="font-medium">{selectedStudent.student_id}</p>
+                          </div>
+
+                          <div>
+                            <p className="text-sm text-gray-500">Name</p>
+                            <p className="font-medium">{selectedStudent.student_name}</p>
+                          </div>
+
+                          <div>
+                            <p className="text-sm text-gray-500">Gender</p>
+                            <p className="font-medium">{selectedStudent.gender}</p>
+                          </div>
+
+                          <div>
+                            <p className="text-sm text-gray-500">Course/Year/Section</p>
+                            <p className="font-medium">{selectedStudent.course_year_section}</p>
+                          </div>
+                        </div>
+
+                        <hr className="my-4" />
+
+                        {/* 🔥 FULL DESCRIPTION FIELD */}
+                        <div className="mb-4">
+                          <p className="text-sm text-gray-500">Description</p>
+                          <textarea
+                            readOnly
+                            rows={3}
+                            className="w-full border border-gray-300 rounded p-2"
+                            value={selectedStudent.violation_text  || ""}
+                          />
+                        </div>
+
+                        {/* 🔥 SECTION FIELD */}
+                        <div className="mb-4">
+                          <p className="text-sm text-gray-500">Section</p>
+                          <input
+                            readOnly
+                            className="w-full border border-gray-300 rounded p-2"
+                            value={selectedStudent.student  || "—"}
+                          />
+                        </div>
+
+                        {/* 🔥 VIOLATION FIELD */}
+                        <div className="mb-4">
+                          <p className="text-sm text-gray-500">Violation</p>
+                          <input
+                            readOnly
+                            className="w-full border border-gray-300 rounded p-2"
+                            value={selectedStudent.student || "—"}
+                          />
+                        </div>
+
+                        {/* 🔥 DATE OF VIOLATION (NEW) */}
+                        <div className="mb-4">
+                          <p className="text-sm text-gray-500">Date of Violation</p>
+                          <input
+                            readOnly
+                            className="w-full border border-gray-300 rounded p-2"
+                            value={
+                              selectedStudent.violation_date
+                                ? new Date(selectedStudent.violation_date).toLocaleDateString()
+                                : "—"
+                            }
+                          />
+                        </div>
+
+                        {/* CLOSE BUTTON */}
+                        <div className="mt-4 flex justify-end">
+                          <button
+                            onClick={() => {
+                              setShowStudentModal(false);
+                              setSelectedStudent(null);
+                            }}
+                            className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors"
+                          >
+                            Close
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   )}
+
+                  {/* Upload File  */}
+            {activePage === "uploadFileFormat" && (
+              <div className="flex flex-col items-center space-y-6">
+
+                {/* Good Moral Certificate */}
+                <div className="bg-white shadow rounded-lg p-6 max-w-lg w-full flex flex-col gap-4">
+                  <h3 className="text-lg font-semibold text-center">Good Moral Certificate</h3>
+
+                  {currentGoodMoral ? (
+                    <div className="flex items-center justify-between w-full">
+                      <div
+                        className="flex items-center gap-3 cursor-pointer truncate"
+                        onClick={() => handlePreviewFile(currentGoodMoral)}
+                      >
+                        {/* Exact icon per extension */}
+                        {(() => {
+                          const ext = currentGoodMoral.name.split(".").pop().toLowerCase();
+                          switch (ext) {
+                            case "pdf":
+                              return <span className="text-red-600 text-5xl">📄</span>;
+                            case "doc":
+                            case "docx":
+                              return <span className="text-blue-600 text-5xl">📝</span>;
+                            case "jpg":
+                            case "jpeg":
+                            case "png":
+                              return <span className="text-green-600 text-5xl">🖼️</span>;
+                            default:
+                              return <span className="text-gray-600 text-5xl">📁</span>;
+                          }
+                        })()}
+                        <span className="truncate max-w-[200px]">{currentGoodMoral.name}</span>
+                      </div>
+
+                      {/* Change File */}
+                      <label className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 transition-colors cursor-pointer">
+                        Change File
+                        <input
+                          type="file"
+                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                          className="hidden"
+                          onChange={(e) => {
+                            if (!e.target.files[0]) return;
+                            setCurrentGoodMoral(e.target.files[0]);
+                            Swal.fire("File Changed!", "The file has been updated.", "success");
+                          }}
+                        />
+                      </label>
+                    </div>
+                  ) : (
+                    <label className="w-full flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 cursor-pointer hover:border-green-500 transition-colors text-center">
+                      <span className="text-6xl mb-2">📁</span>
+                      <span className="text-gray-500 mb-2">Click or drag file here to upload</span>
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                        onChange={(e) => {
+                          if (!e.target.files[0]) return;
+                          setCurrentGoodMoral(e.target.files[0]);
+                          Swal.fire("File Uploaded!", "Good Moral file uploaded successfully.", "success");
+                        }}
+                        className="hidden"
+                      />
+                      <span className="text-sm text-gray-400">Allowed: PDF, DOC, DOCX, JPG, PNG</span>
+                    </label>
+                  )}
+                </div>
+
+            {/* CVSU Rules and Regulations */}
+            <div className="bg-white shadow rounded-lg p-6 max-w-lg w-full flex flex-col gap-4">
+              <h3 className="text-lg font-semibold text-center">CVSU Rules and Regulations</h3>
+
+              {currentRules ? (
+                <div className="flex items-center justify-between w-full">
+                  <div
+                    className="flex items-center gap-3 cursor-pointer truncate"
+                    onClick={() => handlePreviewFile(currentRules)}
+                  >
+                    {/* Exact icon per extension */}
+                    {(() => {
+                      const ext = currentRules.name.split(".").pop().toLowerCase();
+                      switch (ext) {
+                        case "pdf":
+                          return <span className="text-red-600 text-5xl">📄</span>;
+                        case "doc":
+                        case "docx":
+                          return <span className="text-blue-600 text-5xl">📝</span>;
+                        case "jpg":
+                        case "jpeg":
+                        case "png":
+                          return <span className="text-green-600 text-5xl">🖼️</span>;
+                        default:
+                          return <span className="text-gray-600 text-5xl">📁</span>;
+                      }
+                    })()}
+                    <span className="truncate max-w-[200px]">{currentRules.name}</span>
+                  </div>
+
+                  {/* Change File */}
+                  <label className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 transition-colors cursor-pointer">
+                    Change File
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (!e.target.files[0]) return;
+                        setCurrentRules(e.target.files[0]);
+                        Swal.fire("File Changed!", "Rules & Regulations file updated.", "success");
+                      }}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <label className="w-full flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 cursor-pointer hover:border-blue-500 transition-colors text-center">
+                  <span className="text-6xl mb-2">📁</span>
+                  <span className="text-gray-500 mb-2">Click or drag file here to upload</span>
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    onChange={(e) => {
+                      if (!e.target.files[0]) return;
+                      setCurrentRules(e.target.files[0]);
+                      Swal.fire("File Uploaded!", "Rules & Regulations uploaded successfully.", "success");
+                    }}
+                    className="hidden"
+                  />
+                  <span className="text-sm text-gray-400">Allowed: PDF, DOC, DOCX</span>
+                </label>
+              )}
+            </div>
+
+            {/* Preview Modal */}
+            {previewFile && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-lg shadow-lg relative w-full max-w-4xl h-[80vh] flex flex-col">
+                  <button
+                    onClick={() => setPreviewFile(null)}
+                    className="absolute top-4 right-4 text-gray-600 hover:text-black text-xl font-bold"
+                  >
+                    ✕
+                  </button>
+
+                  <div className="flex-1 overflow-auto p-4 flex justify-center items-center">
+                    {previewFile.name.endsWith(".pdf") ? (
+                      <iframe
+                        src={URL.createObjectURL(previewFile)}
+                        className="w-full h-full"
+                        title={previewFile.name}
+                      ></iframe>
+                    ) : (
+                      <img
+                        src={URL.createObjectURL(previewFile)}
+                        alt={previewFile.name}
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    )}
+                  </div>
+
+                  <div className="p-4 flex justify-end">
+                    <button
+                      onClick={() => setPreviewFile(null)}
+                      className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors"
+                    >
+                      Close
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
+          </div>
+        )}
 
-          {/* Student Info Modal (from Search -> View) */}
-          {showStudentModal && selectedStudent && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-white w-full max-w-2xl rounded-xl shadow-xl p-6 relative">
-                <button
-                  onClick={() => {
-                    setShowStudentModal(false);
-                    setSelectedStudent(null);
-                  }}
-                  className="absolute top-4 right-4 text-gray-600 hover:text-black"
-                >
-                  ✕
-                </button>
 
-                <h2 className="text-2xl font-bold text-gray-700 mb-4">Student Information</h2>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-500">ID</p>
-                    <p className="font-medium">{selectedStudent.student_id}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Name</p>
-                    <p className="font-medium">{selectedStudent.student_name}</p>
-                  </div>
-
-                  <div>
-                    <p className="text-sm text-gray-500">Gender</p>
-                    <p className="font-medium">{selectedStudent.gender}</p>
-                  </div>
-
-                  <div>
-                    <p className="text-sm text-gray-500">Course/Year/Section</p>
-                    <p className="font-medium">{selectedStudent.course_year_section}</p>
-                  </div>
-                </div>
-
-                <hr className="my-4" />
-
-                <h3 className="text-lg font-semibold mb-2">All Violations for this Student</h3>
-
-                <div className="space-y-3 max-h-64 overflow-auto pr-2">
-                  {violationsByStudent[selectedStudent.student_id] &&
-                  violationsByStudent[selectedStudent.student_id].length > 0 ? (
-                    violationsByStudent[selectedStudent.student_id]
-                      .slice()
-                      .reverse()
-                      .map((v, idx) => (
-                        <div key={idx} className="p-3 border rounded">
-                          <div className="flex justify-between items-start gap-4">
-                            <div>
-                              <p className="text-sm text-gray-500">Date</p>
-                              <p className="font-medium">{v.violation_date}</p>
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-sm text-gray-500">Description</p>
-                              <p className="whitespace-pre-wrap text-gray-700">
-                                {v.violation_text}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                  ) : (
-                    <p className="text-gray-500">No violations recorded for this student.</p>
-                  )}
-                </div>
-
-                <div className="mt-4 flex justify-end">
-                  <button
-                    onClick={() => {
-                      setShowStudentModal(false);
-                      setSelectedStudent(null);
-                    }}
-                    className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </section>
+    </section>
       </main>
     </div>
   );
