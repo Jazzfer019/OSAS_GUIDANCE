@@ -1,23 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
-import {
-  ChartBarIcon,
-  NewspaperIcon,
-  MagnifyingGlassIcon,
-  PencilSquareIcon,
-  ArrowRightOnRectangleIcon,
-  UserCircleIcon,
-  DocumentPlusIcon,
-} from "@heroicons/react/24/solid";
+import {ChartBarIcon,NewspaperIcon,MagnifyingGlassIcon,PencilSquareIcon,ArrowRightOnRectangleIcon,UserGroupIcon,UserCircleIcon,DocumentPlusIcon, XMarkIcon, EyeIcon, TrashIcon} from "@heroicons/react/24/solid";
 import Swal from "sweetalert2";
-import {
-  LineChart,
-  Line,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import {LineChart,Line,CartesianGrid,XAxis,YAxis,Tooltip,ResponsiveContainer,} from "recharts";
 
 export default function AdminHome() {
   const [activePage, setActivePage] = useState("trends");
@@ -50,7 +34,7 @@ const [currentRules, setCurrentRules] = useState(null);
   const [violations, setViolations] = useState([]);
   //dropdown
   const [showAccountDropdown, setShowAccountDropdown] = useState(false);
-  const [profilePic, setProfilePic] = useState(null);
+ 
 
 useEffect(() => {
   const handleClickOutside = (e) => {
@@ -77,26 +61,169 @@ useEffect(() => {
 const [profilePicPreview, setProfilePicPreview] = useState(null);
 const [user, setUser] = useState({ name: "", email: "", profile_pic:"" });
 
-useEffect(() => {
-  async function fetchUser() {
-    try {
-      const res = await fetch("http://localhost:5000/admin/me?id=1"); // palitan id kung testing
-      if (!res.ok) throw new Error("Failed to fetch user info");
-      const data = await res.json();
-      setUser({
-        id: data.id,
-        name: data.name || "Admin",
-        email: data.email || "",
-        profile_pic: data.profile_pic || null,
-      });
-    } catch (err) {
-      console.error(err);
-    }
-  }
+// Upload file to backend and return display info
+const uploadFile = async (file, fileType) => {
+  if (!file) return null;
 
-  fetchUser();
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("file_type", fileType);
+
+    // Upload file to backend
+    const res = await fetch("http://localhost:5000/file/upload", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("Server returned error:", res.status, text);
+      throw new Error(`Upload failed: ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    // Prepare the file for display (immediate UI feedback)
+    const displayFile = {
+      id: data.file_id,
+      name: file.name,
+      fileType: fileType,
+      stored: data.stored,
+      original: data.original,
+      url: `http://localhost:5000/file/download/${data.stored}`, // Backend URL for download
+    };
+
+    console.log("UPLOAD SUCCESS:", displayFile);
+
+    // Show SweetAlert2 success toast
+    Swal.fire({
+      position: "top-end",
+      icon: "success",
+      title: "File uploaded successfully!",
+      showConfirmButton: false,
+      timer: 2000,
+      toast: true,
+      timerProgressBar: true,
+    });
+
+    // Optionally refresh the file list after upload
+    await listFiles();
+
+    return displayFile;
+  } catch (err) {
+    console.error("UPLOAD ERROR:", err);
+    alert(`File upload failed: ${err.message}`);
+    return null;
+  }
+};
+
+// Function to list all uploaded files
+const listFiles = async () => {
+  try {
+    const res = await fetch("http://localhost:5000/file/list");
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("Error fetching file list:", res.status, text);
+      return;
+    }
+
+    const data = await res.json();
+    if (data.status !== "success") {
+      console.error("Backend error:", data.message);
+      return;
+    }
+
+    const files = data.files;
+    displayFiles(files); // Display the files in the UI
+  } catch (err) {
+    console.error("Error fetching file list:", err);
+  }
+};
+
+// Function to display the files
+const displayFiles = (files) => {
+  const fileListContainer = document.getElementById("file-list");
+  if (!fileListContainer) return;
+
+  fileListContainer.innerHTML = ""; // Clear the current list
+
+  files.forEach((file) => {
+    const fileElement = document.createElement("div");
+    fileElement.classList.add("file-item");
+    fileElement.innerHTML = `
+      <p><strong>${file.original}</strong> (${file.size_bytes} bytes)</p>
+      <a href="${file.path || file.url}" download>Download</a>
+    `;
+    fileListContainer.appendChild(fileElement);
+  });
+};
+
+useEffect(() => {
+  const fetchSavedFiles = async () => {
+    try {
+      const res = await fetch("http://localhost:5000/file/list");
+      if (!res.ok) return;
+
+      const data = await res.json();
+      if (data.status !== "success") return;
+
+      // Assign previously uploaded files to state
+      const goodMoralFile = data.files.find(f => f.file_type === "good_moral");
+      const rulesFile = data.files.find(f => f.file_type === "rules");
+
+      if (goodMoralFile) {
+        setCurrentGoodMoral({
+          name: goodMoralFile.original,
+          url: `http://localhost:5000/file/download/${goodMoralFile.stored}`,
+        });
+      }
+
+      if (rulesFile) {
+        setCurrentRules({
+          name: rulesFile.original,
+          url: `http://localhost:5000/file/download/${rulesFile.stored}`,
+        });
+      }
+    } catch (err) {
+      console.error("Error fetching saved files:", err);
+    }
+  };
+
+  fetchSavedFiles();
 }, []);
 
+//fetch user
+useEffect(() => {
+    async function fetchUser() {
+      try {
+        const res = await fetch("http://localhost:5000/admin/me?id=1"); 
+        if (!res.ok) throw new Error("Failed to fetch user info");
+        const data = await res.json();
+
+        // Adjust the profile_pic URL to include /admin if needed
+        const profilePicUrl = data.profile_pic.includes("/admin/uploads/")
+          ? data.profile_pic
+          : data.profile_pic.replace("/uploads/", "/admin/uploads/");
+
+        setUser({
+          id: data.id,
+          name: data.name || "Admin",
+          email: data.email || "",
+          profile_pic: profilePicUrl,
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    fetchUser();
+  }, []);
+
+  if (!user) return <p>Loading...</p>;
+
+
+//delete
 async function handleDeleteViolation(v) {
   // Confirmation modal (center)
   Swal.fire({
@@ -150,8 +277,7 @@ async function handleDeleteViolation(v) {
 }
 
 
-
-
+//handle file
 const handlePreviewFile = (file) => {
     const ext = file.name.split(".").pop().toLowerCase();
     if (ext === "pdf" || ["jpg","jpeg","png"].includes(ext)) {
@@ -178,10 +304,12 @@ const handlePreviewFile = (file) => {
 
   const menuItems = [
     { id: "trends", label: "View Trends", icon: ChartBarIcon },
-    { id: "news", label: "News Management", icon: NewspaperIcon },
-    { id: "search", label: "Search Student", icon: MagnifyingGlassIcon },
+    { id: "records", label: "Students Record", icon: UserGroupIcon},
+    { id: "search", label: "Students Violation", icon: MagnifyingGlassIcon },
     { id: "violation", label: "Encode Violation", icon: PencilSquareIcon },
     { id: "uploadFileFormat", label: "Upload File Format", icon: DocumentPlusIcon }, // updated icon
+    { id: "news", label: "News Management", icon: NewspaperIcon },
+    
   ];
   // ------------------ Fetch News ------------------
   useEffect(() => {
@@ -337,57 +465,45 @@ async function handleSubmitViolation() {
   }
 
 
-  useEffect(() => {
-    // Only attempt fetch if user typed something relevant
-    const q = (studentId || studentName || "").toString().trim();
-    if (!q) {
-      setStudentInfo(null);
-      return;
-    }
+ useEffect(() => {
+  const q = (studentId || studentName || "").toString().trim();
+  if (!q || q.length < 2) {
+    setStudentInfo(null);
+    return;
+  }
 
-    // don't attempt for very short input
-    if (q.length < 2) return;
+  let isCancelled = false;
+  const timer = setTimeout(async () => {
+    setAutoFetchLoading(true);
+    try {
+      const queryParam = encodeURIComponent(q);
+      const res = await fetch(`http://localhost:5000/students/student?query=${queryParam}`);
+      const data = await res.json(); // always JSON
 
-    let isCancelled = false;
-    const timer = setTimeout(async () => {
-      setAutoFetchLoading(true);
-      try {
-        // Prefer searching by student id if studentId is provided and numeric
-        const queryParam = encodeURIComponent(q);
-        const res = await fetch(`http://localhost:5000/student?query=${queryParam}`);
-        if (!res.ok) {
-          setStudentInfo(null);
-          setAutoFetchLoading(false);
-          return;
+      if (!isCancelled) {
+        // Only fill if student found
+        if (data.student) {
+          setStudentInfo(data.student);
+          setStudentName(prev => prev || data.student.student_name || "");
+          setStudentId(prev => prev || String(data.student.student_id || ""));
+        } else {
+          setStudentInfo(null); // silent if not found
         }
-        const data = await res.json(); // expected: { student_id, student_name, gender, course_year_section } or null
-        if (!isCancelled) {
-          if (data && Object.keys(data).length > 0) {
-            setStudentInfo(data);
-            // auto-fill the form fields with returned student data (but don't overwrite violation text/date)
-            setStudentName((prev) => (prev && prev !== "" ? prev : data.student_name || ""));
-            setStudentId((prev) => (prev && prev !== "" ? prev : String(data.student_id || "")));
-            setGender((prev) => (prev && prev !== "" ? prev : data.gender || ""));
-            setCourseYearSection((prev) =>
-              prev && prev !== "" ? prev : data.course_year_section || ""
-            );
-          } else {
-            setStudentInfo(null);
-          }
-        }
-      } catch (err) {
-        console.error("Auto-fetch student error:", err);
-        if (!isCancelled) setStudentInfo(null);
-      } finally {
-        if (!isCancelled) setAutoFetchLoading(false);
       }
-    }, 450);
+    } catch (err) {
+      console.error("Auto-fetch student error:", err);
+      if (!isCancelled) setStudentInfo(null); // silent on error
+    } finally {
+      if (!isCancelled) setAutoFetchLoading(false);
+    }
+  }, 450);
 
-    return () => {
-      isCancelled = true;
-      clearTimeout(timer);
-    };
-  }, [studentId, studentName]);
+  return () => {
+    isCancelled = true;
+    clearTimeout(timer);
+  };
+}, [studentId, studentName]);
+
 
   // ------------------ Derived: group violations by student id for quick lookups ------------------
   const violationsByStudent = React.useMemo(() => {
@@ -399,6 +515,92 @@ async function handleSubmitViolation() {
     }
     return map;
   }, [violations]);
+
+// ===================== STATE =====================
+const [students, setStudents] = useState([]);
+const [loading, setLoading] = useState(false);
+
+// Modal state
+const [showModal, setShowModal] = useState(false);
+
+// Form state/
+const [studentNumber, setStudentNumber] = useState("");
+const [email, setEmail] = useState("");
+const [phone, setPhone] = useState("");
+const [course, setCourse] = useState("");
+const [enrollmentInfo, setEnrollmentInfo] = useState("");
+
+// Modals for viewing, editing, deleting
+const [viewStudent, setViewStudent] = useState(null);
+const [editStudent, setEditStudent] = useState(null);
+const [deleteStudent, setDeleteStudent] = useState(null);
+
+// ===================== ADD STUDENT =====================
+const handleAddStudent = () => {
+  if (!studentName || !studentNumber || !email) {
+    alert("Please fill all required fields");
+    return;
+  }
+
+  setLoading(true);
+
+  setTimeout(() => {
+    const newStudent = {
+      id: students.length + 1, // or use uuid()
+      student_name: studentName,
+      student_number: studentNumber,
+      email,
+      phone,
+      course,
+      enrollment_info: enrollmentInfo,
+    };
+
+    setStudents([...students, newStudent]);
+
+    // Clear form and close modal
+    setStudentName("");
+    setStudentNumber("");
+    setEmail("");
+    setPhone("");
+    setCourse("");
+    setEnrollmentInfo("");
+    setShowModal(false);
+    setLoading(false);
+  }, 300);
+};
+
+// ===================== EDIT STUDENT =====================
+const handleOpenEditStudent = (student) => {
+  setEditStudent({ ...student }); // clone for editing
+};
+
+const handleEditStudent = () => {
+  if (!editStudent) return;
+
+  setStudents(
+    students.map((s) => (s.id === editStudent.id ? { ...editStudent } : s))
+  );
+
+  setEditStudent(null);
+};
+
+// ===================== DELETE STUDENT =====================
+const handleDeleteStudent = (student) => {
+  setDeleteStudent(student);
+};
+
+const handleConfirmDelete = () => {
+  if (!deleteStudent) return;
+
+  setStudents(students.filter((s) => s.id !== deleteStudent.id));
+  setDeleteStudent(null);
+};
+
+// ===================== VIEW STUDENT =====================
+const handleViewStudent = (student) => {
+  setViewStudent(student);
+};
+
 
   // ------------------ Render ------------------
   return (
@@ -556,10 +758,11 @@ async function handleSubmitViolation() {
         <section className="p-8 overflow-auto h-[calc(100vh-4rem)]">
           <h2 className="text-3xl font-bold text-gray-700 mb-6">
             {activePage === "trends" && "Behavioral Trends"}
-            {activePage === "news" && "News Management"}
-            {activePage === "search" && "Search Students"}
+            {activePage === "records" && "Students Records"}
+            {activePage === "search" && "Students Violation"}
             {activePage === "violation" && "Encode Violation (NLP)"}
             {activePage === "uploadFileFormat" && "Upload File Format"}
+            {activePage === "news" && "News Management"}
           </h2>
 
           {/* Trends */}
@@ -629,7 +832,7 @@ async function handleSubmitViolation() {
                 {/* TABLE HEADERS */}
                 <thead className="bg-gray-200 text-gray-700">
                   <tr>
-                    <th className="py-3 px-4">Student ID</th>
+                    <th className="py-3 px-4">Student Number</th>
                     <th className="py-3 px-4">Student Name</th>
                     <th className="py-3 px-4">Gender</th>
                     <th className="py-3 px-4">Course/Year/Section</th>
@@ -780,12 +983,12 @@ async function handleSubmitViolation() {
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Student ID</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Student Number</label>
                           <input
                             type="number"
                             value={studentId}
                             onChange={(e) => setStudentId(e.target.value)}
-                            placeholder="Enter student ID"
+                            placeholder="Enter student number"
                             className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                           />
                         </div>
@@ -812,20 +1015,6 @@ async function handleSubmitViolation() {
                           </select>
                         </div>
                       </div>
-
-                      {/* Auto-fetch indicator */}
-                      {autoFetchLoading && (
-                        <p className="text-sm text-gray-500 mb-3">Looking up student record…</p>
-                      )}
-                      {studentInfo && (
-                        <div className="mb-3 p-3 bg-green-50 border border-green-100 rounded">
-                          <p className="text-sm text-green-800">
-                            Found student: <strong>{studentInfo.student_name}</strong> (ID: {studentInfo.student_id})
-                          </p>
-                          <p className="text-sm text-green-700">Gender: {studentInfo.gender}</p>
-                          <p className="text-sm text-green-700">CYS: {studentInfo.course_year_section}</p>
-                        </div>
-                      )}
 
                       {/* Violation Text */}
                       <div className="mb-4">
@@ -876,8 +1065,8 @@ async function handleSubmitViolation() {
                 )}
 
               {/* Violation Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {violations.length === 0 ? (
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {violations.length === 0 ? (
               <p className="text-gray-500 col-span-full">No violation records yet.</p>
             ) : (
               violations.map((v, idx) => {
@@ -895,8 +1084,7 @@ async function handleSubmitViolation() {
                     onClick={() => viewStudentInfo(v)}
                   >
                     <p className="font-semibold text-gray-700 text-lg mb-2">
-                      {v.student_name} (ID: {v.student_id})
-                    </p>
+                      {v.student_name} (Number: {v.student_id})</p>
                     <p className="text-gray-600 mb-1">Gender: {v.gender}</p>
                     <p className="text-gray-600 mb-1">CYS: {v.course_year_section}</p>
 
@@ -942,7 +1130,7 @@ async function handleSubmitViolation() {
                         {/* BASIC STUDENT INFO */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <p className="text-sm text-gray-500">ID</p>
+                            <p className="text-sm text-gray-500">Student No.</p>
                             <p className="font-medium">{selectedStudent.student_id}</p>
                           </div>
 
@@ -1025,182 +1213,548 @@ async function handleSubmitViolation() {
                     </div>
                   )}
 
-                  {/* Upload File  */}
-            {activePage === "uploadFileFormat" && (
-              <div className="flex flex-col items-center space-y-6">
+                 {/* ===== Upload File Section ===== */}
+                  {activePage === "uploadFileFormat" && (
+                    <div className="flex flex-col items-center space-y-6">
 
-                {/* Good Moral Certificate */}
-                <div className="bg-white shadow rounded-lg p-6 max-w-lg w-full flex flex-col gap-4">
-                  <h3 className="text-lg font-semibold text-center">Good Moral Certificate</h3>
+                      {/* SIDE-BY-SIDE WRAPPER */}
+                      <div className="w-full flex justify-center gap-6">
 
-                  {currentGoodMoral ? (
-                    <div className="flex items-center justify-between w-full">
-                      <div
-                        className="flex items-center gap-3 cursor-pointer truncate"
-                        onClick={() => handlePreviewFile(currentGoodMoral)}
-                      >
-                        {/* Exact icon per extension */}
-                        {(() => {
-                          const ext = currentGoodMoral.name.split(".").pop().toLowerCase();
-                          switch (ext) {
-                            case "pdf":
-                              return <span className="text-red-600 text-5xl">📄</span>;
-                            case "doc":
-                            case "docx":
-                              return <span className="text-blue-600 text-5xl">📝</span>;
-                            case "jpg":
-                            case "jpeg":
-                            case "png":
-                              return <span className="text-green-600 text-5xl">🖼️</span>;
-                            default:
-                              return <span className="text-gray-600 text-5xl">📁</span>;
-                          }
-                        })()}
-                        <span className="truncate max-w-[200px]">{currentGoodMoral.name}</span>
+                        {/* Good Moral Certificate */}
+                        <div className="bg-white shadow rounded-lg p-6 w-[500px] flex flex-col gap-4">
+                          <h3 className="text-lg font-semibold text-center">Good Moral Certificate</h3>
+
+                          {currentGoodMoral ? (
+                            <div className="flex flex-col gap-4 w-full">
+                              <div className="flex flex-col gap-2 border p-2 rounded">
+
+                                <div className="flex items-center gap-3">
+                                  {(() => {
+                                    const ext = currentGoodMoral.name?.split(".").pop().toLowerCase();
+                                    switch (ext) {
+                                      case "pdf": return <span className="text-red-600 text-5xl">📄</span>;
+                                      case "doc":
+                                      case "docx": return <span className="text-blue-600 text-5xl">📝</span>;
+                                      case "jpg":
+                                      case "jpeg":
+                                      case "png": return <span className="text-green-600 text-5xl">🖼️</span>;
+                                      default: return <span className="text-gray-600 text-5xl">📁</span>;
+                                    }
+                                  })()}
+                                  {/* ONLY FILENAME IS CLICKABLE */}
+                                  <span
+                                    className="truncate font-medium cursor-pointer hover:underline"
+                                    onClick={() => setPreviewFile(currentGoodMoral)}
+                                  >
+                                    {currentGoodMoral.name || "Uploaded File"}
+                                  </span>
+                                </div>
+
+                                {/* Small Scrollable Preview */}
+                                <div className="mt-2 border rounded-lg h-64 overflow-auto flex items-center justify-center p-2 w-full">
+                                  {currentGoodMoral.name.endsWith(".pdf") ? (
+                                    <embed
+                                      src={currentGoodMoral.url}
+                                      type="application/pdf"
+                                      className="w-full h-full"
+                                    />
+                                  ) : (
+                                    <img
+                                      src={currentGoodMoral.url}
+                                      className="w-full h-auto object-contain"
+                                    />
+                                  )}
+                                </div>
+
+                              </div>
+
+                              {/* Change File Button */}
+                              <label
+                                className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 transition-colors cursor-pointer self-start mt-2"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                Change File
+                                <input
+                                  type="file"
+                                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                  className="hidden"
+                                  onChange={async (e) => {
+                                    const file = e.target.files[0];
+                                    if (!file) return;
+
+                                    setCurrentGoodMoral({ name: file.name, file });
+
+                                    const uploaded = await uploadFile(file, "good_moral");
+                                    if (uploaded?.url) {
+                                      setCurrentGoodMoral((prev) => ({
+                                        ...prev,
+                                        url: uploaded.url,
+                                      }));
+                                    }
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          ) : (
+                            <label className="w-full flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 cursor-pointer hover:border-green-500 transition-colors text-center">
+                              <span className="text-6xl mb-2">📁</span>
+                              <span className="text-gray-500 mb-2">Click here to upload</span>
+                              <input
+                                type="file"
+                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                className="hidden"
+                                onChange={async (e) => {
+                                  const file = e.target.files[0];
+                                  if (!file) return;
+
+                                  setCurrentGoodMoral({ name: file.name, file });
+
+                                  const uploaded = await uploadFile(file, "good_moral");
+                                  if (uploaded?.url) {
+                                    setCurrentGoodMoral((prev) => ({
+                                      ...prev,
+                                      url: uploaded.url,
+                                    }));
+                                  }
+                                }}
+                              />
+                              <span className="text-sm text-gray-400">Allowed: PDF, DOC, DOCX, JPG, PNG</span>
+                            </label>
+                          )}
+                        </div>
+
+                        {/* CVSU Rules and Regulations */}
+                        <div className="bg-white shadow rounded-lg p-6 w-[500px] flex flex-col gap-4">
+                          <h3 className="text-lg font-semibold text-center">CVSU Rules and Regulations</h3>
+
+                          {currentRules ? (
+                            <div className="flex flex-col gap-4 w-full">
+                              <div className="flex flex-col gap-2 border p-2 rounded">
+
+                                <div className="flex items-center gap-3">
+                                  {(() => {
+                                    const ext = currentRules.name?.split(".").pop().toLowerCase();
+                                    switch (ext) {
+                                      case "pdf": return <span className="text-red-600 text-5xl">📄</span>;
+                                      case "doc":
+                                      case "docx": return <span className="text-blue-600 text-5xl">📝</span>;
+                                      case "jpg":
+                                      case "jpeg":
+                                      case "png": return <span className="text-green-600 text-5xl">🖼️</span>;
+                                      default: return <span className="text-gray-600 text-5xl">📁</span>;
+                                    }
+                                  })()}
+                                  {/* ONLY FILENAME IS CLICKABLE */}
+                                  <span
+                                    className="truncate font-medium cursor-pointer hover:underline"
+                                    onClick={() => setPreviewFile(currentRules)}
+                                  >
+                                    {currentRules.name}
+                                  </span>
+                                </div>
+
+                                {/* Small Scrollable Preview */}
+                                <div className="mt-2 border rounded-lg h-64 overflow-auto flex items-center justify-center p-2 w-full">
+                                  {currentRules.name.endsWith(".pdf") ? (
+                                    <embed
+                                      src={currentRules.url}
+                                      type="application/pdf"
+                                      className="w-full h-full"
+                                    />
+                                  ) : (
+                                    <img
+                                      src={currentRules.url}
+                                      className="w-full h-auto object-contain"
+                                    />
+                                  )}
+                                </div>
+
+                              </div>
+
+                              {/* Change File Button */}
+                              <label
+                                className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 transition-colors cursor-pointer self-start mt-2"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                Change File
+                                <input
+                                  type="file"
+                                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                  className="hidden"
+                                  onChange={async (e) => {
+                                    const file = e.target.files[0];
+                                    if (!file) return;
+
+                                    setCurrentRules({ name: file.name, file });
+
+                                    const uploaded = await uploadFile(file, "rules");
+                                    if (uploaded?.url) {
+                                      setCurrentRules((prev) => ({
+                                        ...prev,
+                                        url: uploaded.url,
+                                      }));
+                                    }
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          ) : (
+                            <label className="w-full flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 cursor-pointer hover:border-blue-500 transition-colors text-center">
+                              <span className="text-6xl mb-2">📁</span>
+                              <span className="text-gray-500 mb-2">Click here to upload</span>
+                              <input
+                                type="file"
+                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                className="hidden"
+                                onChange={async (e) => {
+                                  const file = e.target.files[0];
+                                  if (!file) return;
+
+                                  setCurrentRules({ name: file.name, file });
+
+                                  const uploaded = await uploadFile(file, "rules");
+                                  if (uploaded?.url) {
+                                    setCurrentRules((prev) => ({
+                                      ...prev,
+                                      url: uploaded.url,
+                                    }));
+                                  }
+                                }}
+                              />
+                              <span className="text-sm text-gray-400">Allowed: PDF, DOC, DOCX, JPG, PNG</span>
+                            </label>
+                          )}
+                        </div>
+
                       </div>
 
-                      {/* Change File */}
-                      <label className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 transition-colors cursor-pointer">
-                        Change File
-                        <input
-                          type="file"
-                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                          className="hidden"
-                          onChange={(e) => {
-                            if (!e.target.files[0]) return;
-                            setCurrentGoodMoral(e.target.files[0]);
-                            Swal.fire("File Changed!", "The file has been updated.", "success");
-                          }}
-                        />
-                      </label>
+                      {/* ===== Fullscreen Modal ===== */}
+                      {previewFile && (
+                        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                          <div className="relative w-full max-w-5xl max-h-[90vh] rounded shadow-lg bg-white/90 flex flex-col">
+
+                            {/* Close Button */}
+                            <button
+                              onClick={() => setPreviewFile(null)}
+                              className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-gray-800 hover:bg-gray-900 text-white shadow-lg transition-colors z-10"
+                            >
+                              ✕
+                            </button>
+
+                            {/* Scrollable Content */}
+                            <div className="flex-1 overflow-auto p-4 flex items-center justify-center">
+                              {previewFile.name.endsWith(".pdf") ? (
+                                <embed
+                                  src={previewFile.url}
+                                  type="application/pdf"
+                                  className="w-full min-h-[500px] md:min-h-[600px]"
+                                />
+                              ) : (
+                                <img
+                                  src={previewFile.url}
+                                  className="max-w-full max-h-[80vh] object-contain"
+                                />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                     </div>
-                  ) : (
-                    <label className="w-full flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 cursor-pointer hover:border-green-500 transition-colors text-center">
-                      <span className="text-6xl mb-2">📁</span>
-                      <span className="text-gray-500 mb-2">Click or drag file here to upload</span>
-                      <input
-                        type="file"
-                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                        onChange={(e) => {
-                          if (!e.target.files[0]) return;
-                          setCurrentGoodMoral(e.target.files[0]);
-                          Swal.fire("File Uploaded!", "Good Moral file uploaded successfully.", "success");
-                        }}
-                        className="hidden"
-                      />
-                      <span className="text-sm text-gray-400">Allowed: PDF, DOC, DOCX, JPG, PNG</span>
-                    </label>
                   )}
-                </div>
 
-            {/* CVSU Rules and Regulations */}
-            <div className="bg-white shadow rounded-lg p-6 max-w-lg w-full flex flex-col gap-4">
-              <h3 className="text-lg font-semibold text-center">CVSU Rules and Regulations</h3>
+                { /* ================= Student Records ================= */ }
+                {activePage === "records" && (
+                  <div className="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 className="text-xl font-semibold text-gray-700 mb-4">
+                      Student Records
+                    </h3>
 
-              {currentRules ? (
-                <div className="flex items-center justify-between w-full">
-                  <div
-                    className="flex items-center gap-3 cursor-pointer truncate"
-                    onClick={() => handlePreviewFile(currentRules)}
-                  >
-                    {/* Exact icon per extension */}
-                    {(() => {
-                      const ext = currentRules.name.split(".").pop().toLowerCase();
-                      switch (ext) {
-                        case "pdf":
-                          return <span className="text-red-600 text-5xl">📄</span>;
-                        case "doc":
-                        case "docx":
-                          return <span className="text-blue-600 text-5xl">📝</span>;
-                        case "jpg":
-                        case "jpeg":
-                        case "png":
-                          return <span className="text-green-600 text-5xl">🖼️</span>;
-                        default:
-                          return <span className="text-gray-600 text-5xl">📁</span>;
-                      }
-                    })()}
-                    <span className="truncate max-w-[200px]">{currentRules.name}</span>
-                  </div>
+                    {/* Add New Student Button */}
+                    <button
+                      onClick={() => setShowModal(true)}
+                      className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 mb-4"
+                    >
+                      Add New Student
+                    </button>
 
-                  {/* Change File */}
-                  <label className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 transition-colors cursor-pointer">
-                    Change File
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                      className="hidden"
-                      onChange={(e) => {
-                        if (!e.target.files[0]) return;
-                        setCurrentRules(e.target.files[0]);
-                        Swal.fire("File Changed!", "Rules & Regulations file updated.", "success");
-                      }}
-                    />
-                  </label>
-                </div>
-              ) : (
-                <label className="w-full flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 cursor-pointer hover:border-blue-500 transition-colors text-center">
-                  <span className="text-6xl mb-2">📁</span>
-                  <span className="text-gray-500 mb-2">Click or drag file here to upload</span>
-                  <input
-                    type="file"
-                    accept=".pdf,.doc,.docx"
-                    onChange={(e) => {
-                      if (!e.target.files[0]) return;
-                      setCurrentRules(e.target.files[0]);
-                      Swal.fire("File Uploaded!", "Rules & Regulations uploaded successfully.", "success");
-                    }}
-                    className="hidden"
-                  />
-                  <span className="text-sm text-gray-400">Allowed: PDF, DOC, DOCX</span>
-                </label>
-              )}
-            </div>
+                    {/* Add Student Modal */}
+                    {showModal && (
+                      <div className="fixed inset-0 z-50 flex items-center justify-center">
+                        <div
+                          className="absolute inset-0 bg-black opacity-70"
+                          onClick={() => setShowModal(false)}
+                        ></div>
+                        <div className="relative bg-white rounded-xl shadow-lg w-full max-w-md p-6 z-10">
+                          <button
+                            className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
+                            onClick={() => setShowModal(false)}
+                          >
+                            <XMarkIcon className="w-6 h-6" />
+                          </button>
+                          <h3 className="text-lg font-semibold mb-4">Add New Student</h3>
 
-            {/* Preview Modal */}
-            {previewFile && (
-              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-lg shadow-lg relative w-full max-w-4xl h-[80vh] flex flex-col">
-                  <button
-                    onClick={() => setPreviewFile(null)}
-                    className="absolute top-4 right-4 text-gray-600 hover:text-black text-xl font-bold"
-                  >
-                    ✕
-                  </button>
+                          <div className="space-y-3">
+                            <input
+                              type="text"
+                              placeholder="Student Name"
+                              className="w-full p-2 border rounded"
+                              value={studentName}
+                              onChange={(e) => setStudentName(e.target.value)}
+                            />
+                            <input
+                              type="number"
+                              placeholder="Student Number"
+                              className="w-full p-2 border rounded"
+                              value={studentNumber}
+                              onChange={(e) => setStudentNumber(e.target.value)}
+                            />
+                            <input
+                              type="email"
+                              placeholder="Email"
+                              className="w-full p-2 border rounded"
+                              value={email}
+                              onChange={(e) => setEmail(e.target.value)}
+                            />
+                            <input
+                              type="number"
+                              placeholder="Phone Number"
+                              className="w-full p-2 border rounded"
+                              value={phone}
+                              onChange={(e) => setPhone(e.target.value)}
+                            />
+                            <input
+                              type="text"
+                              placeholder="Course/Year/Section"
+                              className="w-full p-2 border rounded"
+                              value={course}
+                              onChange={(e) => setCourse(e.target.value)}
+                            />
+                            <textarea
+                              placeholder="Enrollment Info (optional)"
+                              className="w-full p-2 border rounded"
+                              value={enrollmentInfo}
+                              onChange={(e) => setEnrollmentInfo(e.target.value)}
+                            />
+                            <button
+                              onClick={handleAddStudent}
+                              className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 w-full"
+                            >
+                              Submit
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
-                  <div className="flex-1 overflow-auto p-4 flex justify-center items-center">
-                    {previewFile.name.endsWith(".pdf") ? (
-                      <iframe
-                        src={URL.createObjectURL(previewFile)}
-                        className="w-full h-full"
-                        title={previewFile.name}
-                      ></iframe>
-                    ) : (
-                      <img
-                        src={URL.createObjectURL(previewFile)}
-                        alt={previewFile.name}
-                        className="max-h-full max-w-full object-contain"
-                      />
+                    {/* Students Table */}
+                    <div className="overflow-x-auto border rounded mt-4">
+                      <table className="min-w-full text-left">
+                        <thead className="bg-gray-200">
+                          <tr>
+                            <th className="px-4 py-2">ID</th>
+                            <th className="px-4 py-2">Student Name</th>
+                            <th className="px-4 py-2">Student Number</th>
+                            <th className="px-4 py-2">Email</th>
+                            <th className="px-4 py-2">Phone Number</th>
+                            <th className="px-4 py-2">Course</th>
+                            <th className="px-4 py-2">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {loading ? (
+                            <tr>
+                              <td colSpan={7} className="text-center p-4">
+                                Loading...
+                              </td>
+                            </tr>
+                          ) : students.length === 0 ? (
+                            <tr>
+                              <td colSpan={7} className="text-center p-4">
+                                No students found.
+                              </td>
+                            </tr>
+                          ) : (
+                            students.map((s) => (
+                              <tr key={s.id} className="border-b">
+                                <td className="px-4 py-2">{s.id}</td>
+                                <td className="px-4 py-2">{s.student_name}</td>
+                                <td className="px-4 py-2">{s.student_number}</td>
+                                <td className="px-4 py-2">{s.email}</td>
+                                <td className="px-4 py-2">{s.phone}</td>
+                                <td className="px-4 py-2">{s.course}</td>
+                                <td className="px-4 py-2 flex gap-2">
+                                  <button
+                                    onClick={() => setViewStudent(s)}
+                                    className="text-blue-600 hover:underline flex items-center gap-1"
+                                  >
+                                    <EyeIcon className="w-4 h-4" /> View
+                                  </button>
+                                  <button
+                                    onClick={() => setEditStudent(s)}
+                                    className="text-yellow-600 hover:underline flex items-center gap-1"
+                                  >
+                                    <PencilSquareIcon className="w-4 h-4" /> Edit
+                                  </button>
+                                  <button
+                                    onClick={() => setDeleteStudent(s)}
+                                    className="text-red-600 hover:underline flex items-center gap-1"
+                                  >
+                                    <TrashIcon className="w-4 h-4" /> Delete
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* View Modal */}
+                    {viewStudent && (
+                      <div className="fixed inset-0 z-50 flex items-center justify-center">
+                        <div
+                          className="absolute inset-0 bg-black opacity-70"
+                          onClick={() => setViewStudent(null)}
+                        ></div>
+                        <div className="relative bg-white rounded-xl shadow-lg w-full max-w-md p-6 z-10">
+                          <button
+                            className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
+                            onClick={() => setViewStudent(null)}
+                          >
+                            <XMarkIcon className="w-6 h-6" />
+                          </button>
+                          <h3 className="text-lg font-semibold mb-4">Student Details</h3>
+                          <p><strong>Name:</strong> {viewStudent.student_name}</p>
+                          <p><strong>Number:</strong> {viewStudent.student_number}</p>
+                          <p><strong>Email:</strong> {viewStudent.email}</p>
+                          <p><strong>Phone:</strong> {viewStudent.phone}</p>
+                          <p><strong>Course:</strong> {viewStudent.course}</p>
+                          <p><strong>Enrollment Info:</strong> {viewStudent.enrollment_info || "N/A"}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Edit Modal */}
+                    {editStudent && (
+                      <div className="fixed inset-0 z-50 flex items-center justify-center">
+                        <div
+                          className="absolute inset-0 bg-black opacity-70"
+                          onClick={() => setEditStudent(null)}
+                        ></div>
+                        <div className="relative bg-white rounded-xl shadow-lg w-full max-w-md p-6 z-10">
+                          <button
+                            className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
+                            onClick={() => setEditStudent(null)}
+                          >
+                            <XMarkIcon className="w-6 h-6" />
+                          </button>
+                          <h3 className="text-lg font-semibold mb-4">Edit Student</h3>
+                          <div className="space-y-3">
+                            <input
+                              type="text"
+                              placeholder="Student Name"
+                              className="w-full p-2 border rounded"
+                              value={editStudent.student_name}
+                              onChange={(e) =>
+                                setEditStudent({ ...editStudent, student_name: e.target.value })
+                              }
+                            />
+                            <input
+                              type="number"
+                              placeholder="Student Number"
+                              className="w-full p-2 border rounded"
+                              value={editStudent.student_number}
+                              onChange={(e) =>
+                                setEditStudent({ ...editStudent, student_number: e.target.value })
+                              }
+                            />
+                            <input
+                              type="email"
+                              placeholder="Email"
+                              className="w-full p-2 border rounded"
+                              value={editStudent.email}
+                              onChange={(e) =>
+                                setEditStudent({ ...editStudent, email: e.target.value })
+                              }
+                            />
+                            <input
+                              type="number"
+                              placeholder="Phone Number"
+                              className="w-full p-2 border rounded"
+                              value={editStudent.phone}
+                              onChange={(e) =>
+                                setEditStudent({ ...editStudent, phone: e.target.value })
+                              }
+                            />
+                            <input
+                              type="text"
+                              placeholder="Course/Year/Section"
+                              className="w-full p-2 border rounded"
+                              value={editStudent.course}
+                              onChange={(e) =>
+                                setEditStudent({ ...editStudent, course: e.target.value })
+                              }
+                            />
+                            <textarea
+                              placeholder="Enrollment Info"
+                              className="w-full p-2 border rounded"
+                              value={editStudent.enrollment_info}
+                              onChange={(e) =>
+                                setEditStudent({ ...editStudent, enrollment_info: e.target.value })
+                              }
+                            />
+                            <button
+                              onClick={handleEditStudent}
+                              className="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 w-full"
+                            >
+                              Save Changes
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Delete Modal */}
+                    {deleteStudent && (
+                      <div className="fixed inset-0 z-50 flex items-center justify-center">
+                        <div
+                          className="absolute inset-0 bg-black opacity-70"
+                          onClick={() => setDeleteStudent(null)}
+                        ></div>
+                        <div className="relative bg-white rounded-xl shadow-lg w-full max-w-sm p-6 z-10">
+                          <button
+                            className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
+                            onClick={() => setDeleteStudent(null)}
+                          >
+                            <XMarkIcon className="w-6 h-6" />
+                          </button>
+                          <h3 className="text-lg font-semibold mb-4">Confirm Delete</h3>
+                          <p>
+                            Are you sure you want to delete <strong>{deleteStudent.student_name}</strong>?
+                          </p>
+                          <div className="mt-4 flex justify-end gap-2">
+                            <button
+                              className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+                              onClick={() => setDeleteStudent(null)}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                              onClick={handleConfirmDelete}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     )}
                   </div>
+                )}
 
-                  <div className="p-4 flex justify-end">
-                    <button
-                      onClick={() => setPreviewFile(null)}
-                      className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors"
-                    >
-                      Close
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-
-    </section>
-      </main>
-    </div>
-  );
-}
+            </section>
+              </main>
+            </div>
+          );
+         }

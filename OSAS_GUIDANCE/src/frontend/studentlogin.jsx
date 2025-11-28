@@ -36,58 +36,60 @@ export default function StudentLogin() {
 
   // LOGIN FUNCTION
   const handleLogin = async () => {
-    if (!studentNumber || !password) {
+  if (!studentNumber || !password) {
+    Swal.fire({
+      icon: "warning",
+      title: "Incomplete Form",
+      text: "Please enter both student number and password",
+    });
+    return;
+  }
+
+  try {
+    // <-- Fixed URL: include blueprint prefix if you used url_prefix="/students"
+    const res = await fetch("http://localhost:5000/students/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        student_number: studentNumber,
+        password: password,
+      }),
+    });
+
+    // Safely parse JSON
+    const data = await res.json().catch(() => ({}));
+
+    if (res.ok) {
       Swal.fire({
-        icon: "warning",
-        title: "Incomplete Form",
-        text: "Please enter both student number and password",
+        icon: "success",
+        title: "Login Successful",
+        text: data.message,
+        confirmButtonColor: "#22c55e",
+      }).then(() => {
+        navigate("/student_homepage");
       });
-      return;
-    }
-
-    try {
-      const res = await fetch("http://localhost:5000/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          student_number: studentNumber,
-          password: password,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        Swal.fire({
-          icon: "success",
-          title: "Login Successful",
-          text: data.message,
-          confirmButtonColor: "#22c55e",
-        }).then(() => {
-          navigate("/student_homepage");
-        });
-      } else if (res.status === 401) {
-        Swal.fire({
-          icon: "error",
-          title: "Invalid Credentials",
-          text: "Incorrect student number or password",
-        });
-      } else {
-        Swal.fire({
-          icon: "error",
-          title: "Error",
-          text: data.message || "Something went wrong",
-        });
-      }
-    } catch (err) {
-      console.error(err);
+    } else if (res.status === 401) {
       Swal.fire({
         icon: "error",
-        title: "Server Error",
-        text: "Unable to connect to server",
+        title: "Invalid Credentials",
+        text: "Incorrect student number or password",
+      });
+    } else {
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: data.message || "Something went wrong",
       });
     }
-  };
+  } catch (err) {
+    console.error(err);
+    Swal.fire({
+      icon: "error",
+      title: "Server Error",
+      text: "Unable to connect to server",
+    });
+  }
+};
 
   // SUBMIT FORGOT PASSWORD
   const handleForgotPassword = () => {
