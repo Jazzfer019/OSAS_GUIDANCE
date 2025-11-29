@@ -29,34 +29,40 @@ def verify_password(stored_password, provided_password):
 def register_student():
     if request.method == "OPTIONS":
         return jsonify({"msg": "CORS OK"}), 200
+
     try:
         data = request.get_json() or {}
-        student_number = data.get("student_number")
-        student_name = data.get("student_name")
-        email = data.get("email")
+        student_number = (data.get("student_number") or "").strip()
+        student_name = (data.get("student_name") or "").strip()
+        email = (data.get("email") or "").strip()
+        phone = (data.get("phone") or "").strip() if data.get("phone") else None
+        course = (data.get("course") or "").strip() if data.get("course") else None
         password = data.get("password")
 
+        # Required fields
         if not all([student_number, student_name, email, password]):
             return jsonify({"message": "Missing required fields"}), 400
 
-        # Ensure numeric student number
-        try:
-            student_number = int(student_number)
-        except:
+        # Validate numeric fields
+        if not student_number.isdigit():
             return jsonify({"message": "Student number must be numeric"}), 400
+        if phone and not phone.isdigit():
+            return jsonify({"message": "Phone number must contain only digits"}), 400
 
-        # Check for duplicates
+        # Check duplicates
         if Student.query.filter_by(student_number=student_number).first():
             return jsonify({"message": "Student number already exists"}), 409
         if Student.query.filter_by(email=email).first():
             return jsonify({"message": "Email already exists"}), 409
 
-        hashed_pw = hash_password(password)
+        # Create student
         new_student = Student(
             student_number=student_number,
             student_name=student_name,
             email=email,
-            password=hashed_pw
+            phone=phone,
+            course=course,
+            password=hash_password(password)
         )
         db.session.add(new_student)
         db.session.commit()
@@ -75,17 +81,15 @@ def register_student():
 def login_student():
     if request.method == "OPTIONS":
         return jsonify({"msg": "CORS OK"}), 200
+
     try:
         data = request.get_json() or {}
-        student_number = data.get("student_number")
+        student_number = (data.get("student_number") or "").strip()
         password = data.get("password")
 
         if not student_number or not password:
             return jsonify({"message": "Missing credentials"}), 400
-
-        try:
-            student_number = int(student_number)
-        except:
+        if not student_number.isdigit():
             return jsonify({"message": "Student number must be numeric"}), 400
 
         student = Student.query.filter_by(student_number=student_number).first()
@@ -98,7 +102,7 @@ def login_student():
                 "id": student.id,
                 "student_number": student.student_number,
                 "student_name": student.student_name,
-                "email": student.email,
+                "email": student.email
             }
         }), 200
 
@@ -141,3 +145,45 @@ def get_student():
         return jsonify({"student": None}), 200  # silent on error
 
 
+#fetch all students
+
+@student_bp.route("/all", methods=["GET"])
+@cross_origin(origin="http://localhost:5173", supports_credentials=True)
+def get_all_students():
+    try:
+        students = Student.query.all()
+        result = []
+        for s in students:
+            result.append({
+                "id": s.id,
+                "student_name": s.student_name,
+                "student_number": s.student_number,
+                "email": s.email,
+                "phone": s.phone,
+                "course": s.course,
+                
+            })
+        return jsonify(result), 200
+    except Exception:
+        traceback.print_exc()
+        return jsonify({"message": "Internal Server Error"}), 500
+    
+
+     # DELETE student by id
+@student_bp.route("/<int:id>", methods=["DELETE", "OPTIONS"])
+@cross_origin(origin="http://localhost:5173", supports_credentials=True)
+def delete_student(id):
+    if request.method == "OPTIONS":
+        return jsonify({"msg": "CORS OK"}), 200
+
+    student = Student.query.get(id)
+    if not student:
+        return {"message": "Student not found"}, 404
+    
+    try:
+        db.session.delete(student)
+        db.session.commit()
+        return {"message": "Student deleted successfully"}
+    except Exception as e:
+        db.session.rollback()
+        return {"message": str(e)}, 500

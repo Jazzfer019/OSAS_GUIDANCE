@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/solid";
-import Swal from "sweetalert2"; // npm install sweetalert2
+import Swal from "sweetalert2";
 
 export default function StudentRegister() {
   const words = ["TRUTH", "EXCELLENCE", "SERVICE", "EQUALITY"];
@@ -14,6 +14,8 @@ export default function StudentRegister() {
   const [studentNumber, setStudentNumber] = useState("");
   const [studentName, setStudentName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");  // phone as string
+  const [course, setCourse] = useState("");
   const [password, setPassword] = useState("");
 
   // Word fade effect
@@ -30,7 +32,7 @@ export default function StudentRegister() {
 
   // Handle registration
   const handleRegister = async () => {
-    if (!studentNumber || !studentName || !email || !password) {
+    if (!studentNumber || !studentName || !email || !phone || !course || !password) {
       Swal.fire({
         icon: "warning",
         title: "Incomplete Form",
@@ -40,16 +42,18 @@ export default function StudentRegister() {
     }
 
     try {
-      const res = await fetch("http://localhost:5000/students/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          student_number: studentNumber,
-          student_name: studentName, // <-- match Flask backend
-          email: email,
-          password: password,
-        }),
-      });
+      const res = await fetch("http://127.0.0.1:5000/students/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        student_number: studentNumber,
+        student_name: studentName,
+        email,
+        phone,
+        course,
+        password,
+      }),
+    });
 
       const data = await res.json();
 
@@ -59,9 +63,7 @@ export default function StudentRegister() {
           title: "Registration Successful",
           text: data.message,
           confirmButtonColor: "#22c55e",
-        }).then(() => {
-          navigate("/student_login"); // redirect after success
-        });
+        }).then(() => navigate("/student_login"));
       } else {
         Swal.fire({
           icon: "error",
@@ -81,13 +83,12 @@ export default function StudentRegister() {
 
   return (
     <div className="w-screen h-screen bg-gray-900 flex overflow-hidden">
-
       {/* LEFT SIDE */}
-      <div className="w-full md:w-[55%] h-full flex flex-col items-center justify-start pt-16 md:pt-5 p-6 md:p-8 text-center bg-white">
+      <div className="w-full md:w-[55%] h-full flex flex-col items-center justify-start pt-16 md:pt-5 p-6 md:p-8 text-center bg-white overflow-auto">
         <img
           src="/cvsu-logo.png"
           alt="School Logo"
-          className="w-19 md:w-28 h-18 md:h-28 mb-1"
+          className="w-20 md:w-28 h-20 md:h-28 mb-1"
         />
         <h2 className="text-base md:text-xl font-medium">Cavite State University Naic</h2>
         <h1 className="text-2xl md:text-3xl font-bold mb-6 md:mb-8">Guidance Student Record</h1>
@@ -141,6 +142,24 @@ export default function StudentRegister() {
             className="border p-3 rounded-full w-full placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
           />
 
+          <label className="text-gray-700 font-medium">Phone Number</label>
+          <input
+            type="number"
+            placeholder="Enter your phone number"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="border p-3 rounded-full w-full placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+
+          <label className="text-gray-700 font-medium">Course</label>
+          <input
+            type="text"
+            placeholder="Enter your course"
+            value={course}
+            onChange={(e) => setCourse(e.target.value)}
+            className="border p-3 rounded-full w-full placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+
           <label className="text-gray-700 font-medium">Password</label>
           <div className="relative">
             <input
@@ -187,18 +206,14 @@ export default function StudentRegister() {
         />
         <div className="absolute inset-0 p-10 text-white flex flex-col justify-between">
           <p className="text-2xl leading-relaxed font-semibold text-justify tracking-wide drop-shadow-lg max-w-3xl mx-auto mt-70 animate-fadein">
-            Cavite State University - Naic (CvSU) is required by law to process
-            your personal information and sensitive personal information in order
-            to safeguard academic freedom, uphold your right to quality education,
-            and protect your right to data privacy in conformity with Republic Act
-            No. 10173.
+            Cavite State University - Naic (CvSU) is required by law to process your personal information and sensitive personal information in order to safeguard academic freedom, uphold your right to quality education, and protect your right to data privacy in conformity with Republic Act No. 10173.
           </p>
 
           <div
             className={`absolute bottom-10 right-10 text-5xl font-bold tracking-widest drop-shadow-md uppercase transition-all duration-1000 ease-in-out`}
             style={{
-              opacity: fade ? 0.5 : 0,
-              transform: fade ? "translateX(0)" : "translateX(20px)",
+              opacity: fade ? 0.5 : 1,
+              transform: fade ? "translateX(20px)" : "translateX(0)",
             }}
           >
             {words[index]}

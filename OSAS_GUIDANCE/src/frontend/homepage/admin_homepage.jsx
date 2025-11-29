@@ -34,7 +34,8 @@ const [currentRules, setCurrentRules] = useState(null);
   const [violations, setViolations] = useState([]);
   //dropdown
   const [showAccountDropdown, setShowAccountDropdown] = useState(false);
- 
+  //filtered
+   const [filterCategory, setFilterCategory] = useState("all"); // all, name, id, course, date, violation 
 
 useEffect(() => {
   const handleClickOutside = (e) => {
@@ -569,31 +570,49 @@ const handleAddStudent = () => {
   }, 300);
 };
 
-// ===================== EDIT STUDENT =====================
-const handleOpenEditStudent = (student) => {
-  setEditStudent({ ...student }); // clone for editing
-};
-
-const handleEditStudent = () => {
-  if (!editStudent) return;
-
-  setStudents(
-    students.map((s) => (s.id === editStudent.id ? { ...editStudent } : s))
-  );
-
-  setEditStudent(null);
-};
 
 // ===================== DELETE STUDENT =====================
 const handleDeleteStudent = (student) => {
   setDeleteStudent(student);
 };
 
-const handleConfirmDelete = () => {
+const handleConfirmDelete = async () => {
   if (!deleteStudent) return;
 
-  setStudents(students.filter((s) => s.id !== deleteStudent.id));
-  setDeleteStudent(null);
+  try {
+    // DELETE request sa backend
+    const res = await fetch(`http://localhost:5000/students/${deleteStudent.id}`, {
+      method: "DELETE",
+    });
+
+    if (!res.ok) throw new Error("Failed to delete student");
+
+    // Update front-end state
+    setStudents((prev) =>
+      prev.filter((s) => Number(s.id) !== Number(deleteStudent.id))
+    );
+
+    setDeleteStudent(null);
+
+    // SweetAlert2 toast success
+    Swal.fire({
+      toast: true,
+      position: "top-end",
+      icon: "success",
+      title: "Student deleted successfully",
+      showConfirmButton: false,
+      timer: 2000,
+      timerProgressBar: true,
+    });
+
+  } catch (err) {
+    console.error(err);
+    Swal.fire({
+      icon: "error",
+      title: "Oops...",
+      text: "Failed to delete student!",
+    });
+  }
 };
 
 // ===================== VIEW STUDENT =====================
@@ -601,6 +620,96 @@ const handleViewStudent = (student) => {
   setViewStudent(student);
 };
 
+
+const fetchStudents = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("http://localhost:5000/students/all"); // adjust URL
+      const data = await res.json();
+      setStudents(data);
+    } catch (err) {
+      console.error("Failed to fetch students:", err);
+      Swal.fire("Error", "Failed to fetch students", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activePage === "records") {
+      fetchStudents();
+    }
+  }, [activePage]);
+
+  
+  // STATES
+
+const [filteredStudents, setFilteredStudents] = useState([]);
+
+// Recalculate filtered students when query or filter changes
+useEffect(() => {
+  const q = query.trim().toLowerCase();
+
+  const result = students.filter((s) => {
+    const name = (s.student_name || "").toLowerCase();
+    const id = String(s.student_number || "");
+    const course = (s.course || "").toLowerCase();
+    const email = (s.email || "").toLowerCase();
+    const phone = String(s.phone || "");
+
+    switch (filterCategory) {
+      case "name": return name.includes(q);
+      case "id": return id.includes(q);
+      case "course": return course.includes(q);
+      case "email": return email.includes(q);
+      case "phone": return phone.includes(q);
+      case "all":
+      default:
+        return (
+          name.includes(q) ||
+          id.includes(q) ||
+          course.includes(q) ||
+          email.includes(q) ||
+          phone.includes(q)
+        );
+    }
+  });
+
+  setFilteredStudents(result);
+}, [query, filterCategory, students]);
+
+
+// Recalculate filtered students when query or filter changes
+useEffect(() => {
+  const q = query.trim().toLowerCase();
+
+  const result = students.filter((s) => {
+    const name = (s.student_name || "").toLowerCase();
+    const id = String(s.student_number || "");
+    const course = (s.course || "").toLowerCase();
+    const email = (s.email || "").toLowerCase();
+    const phone = String(s.phone || "");
+
+    switch (filterCategory) {
+      case "name": return name.includes(q);
+      case "id": return id.includes(q);
+      case "course": return course.includes(q);
+      case "email": return email.includes(q);
+      case "phone": return phone.includes(q);
+      case "all":
+      default:
+        return (
+          name.includes(q) ||
+          id.includes(q) ||
+          course.includes(q) ||
+          email.includes(q) ||
+          phone.includes(q)
+        );
+    }
+  });
+
+  setFilteredStudents(result);
+}, [query, filterCategory, students]);
 
   // ------------------ Render ------------------
   return (
@@ -810,130 +919,171 @@ const handleViewStudent = (student) => {
             </div>
           )}
 
-      {/* Search Students */}
-        {activePage === "search" && (
-          <div className="space-y-6">
-            
-            {/* Search Input */}
-            <div className="relative w-full max-w-xl">
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search student by name or ID..."
-                className="w-full pl-4 pr-4 py-2 bg-white text-gray-800 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
-            </div>
+              {/* Search Students */}
+            {activePage === "search" && (
+              <div className="space-y-6">
 
-            {/* TABLE */}
-            <div className="bg-white shadow rounded-lg overflow-hidden">
-              <table className="w-full text-left">
+                {/* Search Input + Category */}
+                <div className="flex items-center space-x-2 max-w-xl">
+                  {/* Search Icon */}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5 text-gray-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-4.35-4.35M5 11a6 6 0 1112 0 6 6 0 01-12 0z"
+                    />
+                  </svg>
 
-                {/* TABLE HEADERS */}
-                <thead className="bg-gray-200 text-gray-700">
-                  <tr>
-                    <th className="py-3 px-4">Student Number</th>
-                    <th className="py-3 px-4">Student Name</th>
-                    <th className="py-3 px-4">Gender</th>
-                    <th className="py-3 px-4">Course/Year/Section</th>
-                    <th className="py-3 px-20">Description</th>
-                    <th className="py-3 px-4">Section</th>
-                    <th className="py-3 px-4">Violation</th>
-                    <th className="py-3 px-4">Date</th>
-                    <th className="py-3 px-10">Actions</th>
-                  </tr>
-                </thead>
+                  {/* Search Input */}
+                  <input
+                    type="text"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search student..."
+                    className="w-full pl-2 pr-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
 
-                {/* TABLE BODY */}
-                <tbody>
-                  {(() => {
-                    const filtered = violations.filter((v) => {
-                      if (!query) return true;
-                      const q = query.toLowerCase();
-                      return (
-                        (v.student_name || "").toLowerCase().includes(q) ||
-                        String(v.student_id || "").includes(q) ||
-                        (v.violation_text || "").toLowerCase().includes(q)
-                      );
-                    });
+                  {/* Category Dropdown */}
+                  <select
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="all">All</option>
+                    <option value="name">Name</option>
+                    <option value="id">ID</option>
+                    <option value="course">Course</option>
+                    <option value="violation">Violation</option>
+                    <option value="date">Date</option>
+                  </select>
+                </div>
 
-                    if (filtered.length === 0) {
-                      return (
-                        <tr>
-                          <td colSpan="9" className="text-center py-6 text-gray-500">
-                            No results found. Type to search...
-                          </td>
-                        </tr>
-                      );
-                    }
+                {/* TABLE */}
+                <div className="bg-white shadow rounded-lg overflow-hidden">
+                  <table className="w-full text-left">
 
-                    const formatDate = (dateStr) => {
-                      if (!dateStr) return "";
-                      const date = new Date(dateStr);
-                      const mm = String(date.getMonth() + 1).padStart(2, "0");
-                      const dd = String(date.getDate()).padStart(2, "0");
-                      const yy = String(date.getFullYear()).slice(-2);
-                      return `${mm}/${dd}/${yy}`;
-                    };
+                    {/* TABLE HEADERS */}
+                    <thead className="bg-gray-200 text-gray-700">
+                      <tr>
+                        {(filterCategory === "all" || filterCategory === "id") && <th className="py-3 px-4">Student Number</th>}
+                        {(filterCategory === "all" || filterCategory === "name") && <th className="py-3 px-4">Student Name</th>}
+                        {(filterCategory === "all") && <th className="py-3 px-4">Gender</th>}
+                        {(filterCategory === "all" || filterCategory === "course") && <th className="py-3 px-4">Course/Year/Section</th>}
+                        {(filterCategory === "all" || filterCategory === "violation") && <th className="py-3 px-20">Description</th>}
+                        {(filterCategory === "all") && <th className="py-3 px-4">Section</th>}
+                        {(filterCategory === "all") && <th className="py-3 px-4">Violation</th>}
+                        {(filterCategory === "all" || filterCategory === "date") && <th className="py-3 px-4">Date</th>}
+                        <th className="py-3 px-10">Actions</th>
+                      </tr>
+                    </thead>
 
-                    return filtered.map((v, idx) => (
-                      <tr key={idx} className="border-b last:border-b-0">
+                    {/* TABLE BODY */}
+                    <tbody>
+                      {(() => {
+                        const filtered = violations.filter((v) => {
+                          const q = (query || "").toLowerCase();
+                          if (!q) return true;
 
-                        {/* Student ID */}
-                        <td className="py-3 px-4">{v.student_id}</td>
+                          const studentName = (v.student_name || "").toLowerCase();
+                          const studentId = String(v.student_number || "");
+                          const course = (v.course_year_section || "").toLowerCase();
+                          const violationText = (v.violation_text || "").toLowerCase();
+                          const dateStr = v.violation_date
+                            ? new Date(v.violation_date).toLocaleDateString("en-US")
+                            : "";
 
-                        {/* Name */}
-                        <td className="py-3 px-4">{v.student_name}</td>
+                          switch (filterCategory) {
+                            case "name":
+                              return studentName.includes(q);
+                            case "id":
+                              return studentId.includes(q);
+                            case "course":
+                              return course.includes(q);
+                            case "violation":
+                              return violationText.includes(q);
+                            case "date":
+                              return dateStr.includes(q);
+                            case "all":
+                            default:
+                              return (
+                                studentName.includes(q) ||
+                                studentId.includes(q) ||
+                                course.includes(q) ||
+                                violationText.includes(q) ||
+                                dateStr.includes(q)
+                              );
+                          }
+                        });
 
-                        {/* Gender */}
-                        <td className="py-3 px-4">{v.gender}</td>
+                        if (filtered.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan="9" className="text-center py-6 text-gray-500">
+                                No results found. Type to search...
+                              </td>
+                            </tr>
+                          );
+                        }
 
-                        {/* Course / Year / Section */}
-                        <td className="py-3 px-4">{v.course_year_section}</td>
-                        
-                        {/* Violation Text */}
-                      <td className="py-3 px-20 max-w-xs">
-                        <span className="block truncate">
-                          {v.violation_text.length > 15
-                            ? v.violation_text.slice(0, 15) + "..."
-                            : v.violation_text}
-                        </span>
-                      </td>
-                        {/* SECTION — empty */}
-                        <td className="py-3 px-4"></td>
+                        const formatDate = (dateStr) => {
+                          if (!dateStr) return "";
+                          const date = new Date(dateStr);
+                          const mm = String(date.getMonth() + 1).padStart(2, "0");
+                          const dd = String(date.getDate()).padStart(2, "0");
+                          const yy = String(date.getFullYear()).slice(-2);
+                          return `${mm}/${dd}/${yy}`;
+                        };
 
-                        {/* VIOLATION — empty */}
-                        <td className="py-3 px-4"></td>
+                        return filtered.map((v, idx) => (
+                          <tr key={idx} className="border-b last:border-b-0">
+                            {(filterCategory === "all" || filterCategory === "id") && <td className="py-3 px-4">{v.student_id}</td>}
+                            {(filterCategory === "all" || filterCategory === "name") && <td className="py-3 px-4">{v.student_name}</td>}
+                            {(filterCategory === "all") && <td className="py-3 px-4">{v.gender}</td>}
+                            {(filterCategory === "all" || filterCategory === "course") && <td className="py-3 px-4">{v.course_year_section}</td>}
+                            {(filterCategory === "all" || filterCategory === "violation") && (
+                              <td className="py-3 px-20 max-w-xs">
+                                <span className="block truncate">
+                                  {(v.violation_text || "").length > 15
+                                    ? (v.violation_text || "").slice(0, 15) + "..."
+                                    : v.violation_text || ""}
+                                </span>
+                              </td>
+                            )}
+                            {(filterCategory === "all") && <td className="py-3 px-4"></td>}
+                            {(filterCategory === "all") && <td className="py-3 px-4"></td>}
+                            {(filterCategory === "all" || filterCategory === "date") && <td className="py-3 px-1">{formatDate(v.violation_date)}</td>}
 
-                        {/* DATE */}
-                        <td className="py-3 px-1">{formatDate(v.violation_date)}</td>
-
-                        {/* ACTION BUTTON */}
-                        <td className="py-3 px-4">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => viewStudentInfo(v)}
-                              className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
-                            >
-                              View
-                            </button>
-                               <button
+                            <td className="py-3 px-4">
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => viewStudentInfo(v)}
+                                  className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
+                                >
+                                  View
+                                </button>
+                                <button
                                   onClick={() => handleDeleteViolation(v)}
                                   className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
                                 >
                                   Delete
-                             </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ));
-                  })()}
-                </tbody>
-
-              </table>
-            </div>
-          </div>
-        )}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ));
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
         {/* Encode Violation Section */}
         {activePage === "violation" && (
@@ -1019,7 +1169,7 @@ const handleViewStudent = (student) => {
                       {/* Violation Text */}
                       <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Violation Description / Interview Text
+                         Interview Text
                         </label>
                         <textarea
                           value={violationText}
@@ -1090,7 +1240,7 @@ const handleViewStudent = (student) => {
 
                     {/* DESCRIPTION (truncated to prevent overflow) */}
                     <p className="text-gray-600 mb-1 truncate max-w-full" title={v.violation_text}>
-                      Description: {v.violation_text}
+                     Admin Note: {v.violation_text}
                     </p>
 
                     {/* SECTION */}
@@ -1154,7 +1304,7 @@ const handleViewStudent = (student) => {
 
                         {/* 🔥 FULL DESCRIPTION FIELD */}
                         <div className="mb-4">
-                          <p className="text-sm text-gray-500">Description</p>
+                          <p className="text-sm text-gray-500">Admin Note</p>
                           <textarea
                             readOnly
                             rows={3}
@@ -1462,139 +1612,87 @@ const handleViewStudent = (student) => {
 
                     </div>
                   )}
-
-                { /* ================= Student Records ================= */ }
+                {/* ================= Student Records ================= */}
                 {activePage === "records" && (
-                  <div className="bg-white p-6 rounded-xl shadow-lg">
-                    <h3 className="text-xl font-semibold text-gray-700 mb-4">
-                      Student Records
-                    </h3>
+                  <div className="bg-white p-6 rounded-xl shadow-lg space-y-6">
+                    <h3 className="text-xl font-semibold text-gray-700">Student Records</h3>
 
-                    {/* Add New Student Button */}
-                    <button
-                      onClick={() => setShowModal(true)}
-                      className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 mb-4"
-                    >
-                      Add New Student
-                    </button>
+                    {/* Search Input + Category */}
+                    <div className="flex items-center space-x-2 max-w-xl">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5 text-gray-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M21 21l-4.35-4.35M5 11a6 6 0 1112 0 6 6 0 01-12 0z"
+                        />
+                      </svg>
 
-                    {/* Add Student Modal */}
-                    {showModal && (
-                      <div className="fixed inset-0 z-50 flex items-center justify-center">
-                        <div
-                          className="absolute inset-0 bg-black opacity-70"
-                          onClick={() => setShowModal(false)}
-                        ></div>
-                        <div className="relative bg-white rounded-xl shadow-lg w-full max-w-md p-6 z-10">
-                          <button
-                            className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
-                            onClick={() => setShowModal(false)}
-                          >
-                            <XMarkIcon className="w-6 h-6" />
-                          </button>
-                          <h3 className="text-lg font-semibold mb-4">Add New Student</h3>
+                      <input
+                        type="text"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Search student..."
+                        className="w-full pl-2 pr-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
 
-                          <div className="space-y-3">
-                            <input
-                              type="text"
-                              placeholder="Student Name"
-                              className="w-full p-2 border rounded"
-                              value={studentName}
-                              onChange={(e) => setStudentName(e.target.value)}
-                            />
-                            <input
-                              type="number"
-                              placeholder="Student Number"
-                              className="w-full p-2 border rounded"
-                              value={studentNumber}
-                              onChange={(e) => setStudentNumber(e.target.value)}
-                            />
-                            <input
-                              type="email"
-                              placeholder="Email"
-                              className="w-full p-2 border rounded"
-                              value={email}
-                              onChange={(e) => setEmail(e.target.value)}
-                            />
-                            <input
-                              type="number"
-                              placeholder="Phone Number"
-                              className="w-full p-2 border rounded"
-                              value={phone}
-                              onChange={(e) => setPhone(e.target.value)}
-                            />
-                            <input
-                              type="text"
-                              placeholder="Course/Year/Section"
-                              className="w-full p-2 border rounded"
-                              value={course}
-                              onChange={(e) => setCourse(e.target.value)}
-                            />
-                            <textarea
-                              placeholder="Enrollment Info (optional)"
-                              className="w-full p-2 border rounded"
-                              value={enrollmentInfo}
-                              onChange={(e) => setEnrollmentInfo(e.target.value)}
-                            />
-                            <button
-                              onClick={handleAddStudent}
-                              className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 w-full"
-                            >
-                              Submit
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                      <select
+                        value={filterCategory}
+                        onChange={(e) => setFilterCategory(e.target.value)}
+                        className="border border-gray-300 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                      >
+                        <option value="all">All</option>
+                        <option value="name">Name</option>
+                        <option value="id">ID</option>
+                        <option value="course">Course</option>
+                        <option value="email">Email</option>
+                        <option value="phone">Phone</option>
+                      </select>
+                    </div>
 
                     {/* Students Table */}
-                    <div className="overflow-x-auto border rounded mt-4">
+                    <div className="overflow-x-auto border rounded">
                       <table className="min-w-full text-left">
-                        <thead className="bg-gray-200">
+                        <thead className="bg-gray-200 text-gray-700">
                           <tr>
-                            <th className="px-4 py-2">ID</th>
-                            <th className="px-4 py-2">Student Name</th>
-                            <th className="px-4 py-2">Student Number</th>
-                            <th className="px-4 py-2">Email</th>
-                            <th className="px-4 py-2">Phone Number</th>
-                            <th className="px-4 py-2">Course</th>
+                            {(filterCategory === "all" || filterCategory === "id") && <th className="px-4 py-2">ID</th>}
+                            {(filterCategory === "all" || filterCategory === "name") && <th className="px-4 py-2">Student Name</th>}
+                            {(filterCategory === "all" || filterCategory === "id") && <th className="px-4 py-2">Student Number</th>}
+                            {(filterCategory === "all" || filterCategory === "email") && <th className="px-4 py-2">Email</th>}
+                            {(filterCategory === "all" || filterCategory === "phone") && <th className="px-4 py-2">Phone Number</th>}
+                            {(filterCategory === "all" || filterCategory === "course") && <th className="px-4 py-2">Course</th>}
                             <th className="px-4 py-2">Actions</th>
                           </tr>
                         </thead>
+
                         <tbody>
-                          {loading ? (
+                          {filteredStudents.length === 0 ? (
                             <tr>
-                              <td colSpan={7} className="text-center p-4">
-                                Loading...
-                              </td>
-                            </tr>
-                          ) : students.length === 0 ? (
-                            <tr>
-                              <td colSpan={7} className="text-center p-4">
+                              <td colSpan={7} className="text-center py-6 text-gray-500">
                                 No students found.
                               </td>
                             </tr>
                           ) : (
-                            students.map((s) => (
-                              <tr key={s.id} className="border-b">
-                                <td className="px-4 py-2">{s.id}</td>
-                                <td className="px-4 py-2">{s.student_name}</td>
-                                <td className="px-4 py-2">{s.student_number}</td>
-                                <td className="px-4 py-2">{s.email}</td>
-                                <td className="px-4 py-2">{s.phone}</td>
-                                <td className="px-4 py-2">{s.course}</td>
-                                <td className="px-4 py-2 flex gap-2">
+                            filteredStudents.map((s) => (
+                              <tr key={s.id} className="border-b last:border-b-0">
+                                {(filterCategory === "all" || filterCategory === "id") && <td className="py-3 px-4">{s.id}</td>}
+                                {(filterCategory === "all" || filterCategory === "name") && <td className="py-3 px-4">{s.student_name}</td>}
+                                {(filterCategory === "all" || filterCategory === "id") && <td className="py-3 px-4">{s.student_number}</td>}
+                                {(filterCategory === "all" || filterCategory === "email") && <td className="py-3 px-4">{s.email}</td>}
+                                {(filterCategory === "all" || filterCategory === "phone") && <td className="py-3 px-4">{s.phone}</td>}
+                                {(filterCategory === "all" || filterCategory === "course") && <td className="py-3 px-4">{s.course}</td>}
+                                <td className="py-3 px-4 flex gap-2">
                                   <button
                                     onClick={() => setViewStudent(s)}
                                     className="text-blue-600 hover:underline flex items-center gap-1"
                                   >
                                     <EyeIcon className="w-4 h-4" /> View
-                                  </button>
-                                  <button
-                                    onClick={() => setEditStudent(s)}
-                                    className="text-yellow-600 hover:underline flex items-center gap-1"
-                                  >
-                                    <PencilSquareIcon className="w-4 h-4" /> Edit
                                   </button>
                                   <button
                                     onClick={() => setDeleteStudent(s)}
@@ -1615,12 +1713,12 @@ const handleViewStudent = (student) => {
                       <div className="fixed inset-0 z-50 flex items-center justify-center">
                         <div
                           className="absolute inset-0 bg-black opacity-70"
-                          onClick={() => setViewStudent(null)}
+                          onClick={() => handleViewStudent(null)}
                         ></div>
                         <div className="relative bg-white rounded-xl shadow-lg w-full max-w-md p-6 z-10">
                           <button
                             className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
-                            onClick={() => setViewStudent(null)}
+                            onClick={() => handleViewStudent(null)}
                           >
                             <XMarkIcon className="w-6 h-6" />
                           </button>
@@ -1630,87 +1728,6 @@ const handleViewStudent = (student) => {
                           <p><strong>Email:</strong> {viewStudent.email}</p>
                           <p><strong>Phone:</strong> {viewStudent.phone}</p>
                           <p><strong>Course:</strong> {viewStudent.course}</p>
-                          <p><strong>Enrollment Info:</strong> {viewStudent.enrollment_info || "N/A"}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Edit Modal */}
-                    {editStudent && (
-                      <div className="fixed inset-0 z-50 flex items-center justify-center">
-                        <div
-                          className="absolute inset-0 bg-black opacity-70"
-                          onClick={() => setEditStudent(null)}
-                        ></div>
-                        <div className="relative bg-white rounded-xl shadow-lg w-full max-w-md p-6 z-10">
-                          <button
-                            className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
-                            onClick={() => setEditStudent(null)}
-                          >
-                            <XMarkIcon className="w-6 h-6" />
-                          </button>
-                          <h3 className="text-lg font-semibold mb-4">Edit Student</h3>
-                          <div className="space-y-3">
-                            <input
-                              type="text"
-                              placeholder="Student Name"
-                              className="w-full p-2 border rounded"
-                              value={editStudent.student_name}
-                              onChange={(e) =>
-                                setEditStudent({ ...editStudent, student_name: e.target.value })
-                              }
-                            />
-                            <input
-                              type="number"
-                              placeholder="Student Number"
-                              className="w-full p-2 border rounded"
-                              value={editStudent.student_number}
-                              onChange={(e) =>
-                                setEditStudent({ ...editStudent, student_number: e.target.value })
-                              }
-                            />
-                            <input
-                              type="email"
-                              placeholder="Email"
-                              className="w-full p-2 border rounded"
-                              value={editStudent.email}
-                              onChange={(e) =>
-                                setEditStudent({ ...editStudent, email: e.target.value })
-                              }
-                            />
-                            <input
-                              type="number"
-                              placeholder="Phone Number"
-                              className="w-full p-2 border rounded"
-                              value={editStudent.phone}
-                              onChange={(e) =>
-                                setEditStudent({ ...editStudent, phone: e.target.value })
-                              }
-                            />
-                            <input
-                              type="text"
-                              placeholder="Course/Year/Section"
-                              className="w-full p-2 border rounded"
-                              value={editStudent.course}
-                              onChange={(e) =>
-                                setEditStudent({ ...editStudent, course: e.target.value })
-                              }
-                            />
-                            <textarea
-                              placeholder="Enrollment Info"
-                              className="w-full p-2 border rounded"
-                              value={editStudent.enrollment_info}
-                              onChange={(e) =>
-                                setEditStudent({ ...editStudent, enrollment_info: e.target.value })
-                              }
-                            />
-                            <button
-                              onClick={handleEditStudent}
-                              className="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 w-full"
-                            >
-                              Save Changes
-                            </button>
-                          </div>
                         </div>
                       </div>
                     )}
@@ -1720,23 +1737,23 @@ const handleViewStudent = (student) => {
                       <div className="fixed inset-0 z-50 flex items-center justify-center">
                         <div
                           className="absolute inset-0 bg-black opacity-70"
-                          onClick={() => setDeleteStudent(null)}
+                          onClick={() => handleDeleteStudent(null)}
                         ></div>
                         <div className="relative bg-white rounded-xl shadow-lg w-full max-w-sm p-6 z-10">
                           <button
                             className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
-                            onClick={() => setDeleteStudent(null)}
+                            onClick={() => handleDeleteStudent(null)}
                           >
                             <XMarkIcon className="w-6 h-6" />
                           </button>
                           <h3 className="text-lg font-semibold mb-4">Confirm Delete</h3>
                           <p>
-                            Are you sure you want to delete <strong>{deleteStudent.student_name}</strong>?
+                            Are you sure you want to delete <strong>{deleteStudent.id}</strong>?
                           </p>
                           <div className="mt-4 flex justify-end gap-2">
                             <button
                               className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
-                              onClick={() => setDeleteStudent(null)}
+                              onClick={() => handleDeleteStudent(null)}
                             >
                               Cancel
                             </button>

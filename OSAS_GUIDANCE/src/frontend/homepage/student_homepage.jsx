@@ -1,10 +1,19 @@
-import React, { useState } from "react";
-import {DocumentTextIcon, ChatBubbleBottomCenterTextIcon, NewspaperIcon, ArrowRightOnRectangleIcon, MagnifyingGlassIcon,} from "@heroicons/react/24/solid";
+import React, { useState, useEffect } from "react";
+import {
+  DocumentTextIcon,
+  ChatBubbleBottomCenterTextIcon,
+  NewspaperIcon,
+  ArrowRightOnRectangleIcon,
+  MagnifyingGlassIcon,
+  EyeIcon,
+} from "@heroicons/react/24/solid";
 import Swal from "sweetalert2";
 
 export default function StudentHome() {
   const [activePage, setActivePage] = useState("records");
   const [query, setQuery] = useState("");
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const menuItems = [
     { id: "records", label: "Records", icon: DocumentTextIcon },
@@ -13,32 +22,48 @@ export default function StudentHome() {
     { id: "pdf", label: "PDF", icon: DocumentTextIcon },
   ];
 
-  function handleLogout() {
-  Swal.fire({
-    title: "Logout",
-    text: "Are you sure you want to log out?",
-    icon: "warning",
-    showCancelButton: true,
-    confirmButtonText: "Yes, log out",
-    cancelButtonText: "Cancel",
-    confirmButtonColor: "#16a34a",
-    cancelButtonColor: "#d33",
-    reverseButtons: false,
-  }).then((result) => {
-    if (result.isConfirmed) {
-      Swal.fire({
-        title: "Logged out",
-        text: "You have been successfully logged out.",
-        icon: "success",
-        timer: 1200,
-        showConfirmButton: false,
-      }).then(() => {
-        window.location.href = "/";
-      });
+  // Fetch student records from backend
+  useEffect(() => {
+    if (activePage === "records") {
+      setLoading(true);
+      fetch("http://localhost:5000/student_records") // adjust endpoint
+        .then((res) => res.json())
+        .then((data) => {
+          setStudents(data.records || []);
+          setLoading(false);
+        })
+        .catch((err) => {
+          console.error(err);
+          setLoading(false);
+        });
     }
-  });
-}
+  }, [activePage]);
 
+  function handleLogout() {
+    Swal.fire({
+      title: "Logout",
+      text: "Are you sure you want to log out?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Yes, log out",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#16a34a",
+      cancelButtonColor: "#d33",
+      reverseButtons: false,
+    }).then((result) => {
+      if (result.isConfirmed) {
+        Swal.fire({
+          title: "Logged out",
+          text: "You have been successfully logged out.",
+          icon: "success",
+          timer: 1200,
+          showConfirmButton: false,
+        }).then(() => {
+          window.location.href = "/";
+        });
+      }
+    });
+  }
 
   return (
     <div className="w-screen h-screen flex bg-gray-100 overflow-hidden">
@@ -93,52 +118,42 @@ export default function StudentHome() {
       <main className="flex-1 flex flex-col">
         {/* Topbar */}
         <header className="w-full h-16 bg-[#1f2937] text-white shadow-md flex items-center justify-between px-6 sticky top-0 z-20 border-b border-gray-700">
-
-              {/* LEFT side — empty or you can add breadcrumb later */}
-              <div></div>
-
-              {/* RIGHT side — Search + Avatar */}
-              <div className="flex items-center gap-4">
-
-                {/* Search (white) */}
-                <div className="relative w-80">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                    <MagnifyingGlassIcon className="w-5 h-5" />
-                  </span>
-                  <input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search files, records, students..."
-                    className="w-full pl-11 pr-4 py-2 bg-white text-gray-800 border border-gray-300 rounded-full shadow-sm 
+          <div></div>
+          <div className="flex items-center gap-4">
+            <div className="relative w-80">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                <MagnifyingGlassIcon className="w-5 h-5" />
+              </span>
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search files, records, students..."
+                className="w-full pl-11 pr-4 py-2 bg-white text-gray-800 border border-gray-300 rounded-full shadow-sm 
                     focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
-                  />
-                </div>
-
-                {/* Avatar */}
-                <div
-                  role="img"
-                  aria-label="admin avatar"
-                  className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center border border-gray-400 shadow"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="w-6 h-6 text-gray-700"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 20.25a8.25 8.25 0 0115 0v.75H4.5v-.75z" />
-                  </svg>
-                </div>
-
-              </div>
-            </header>
+              />
+            </div>
+            <div
+              role="img"
+              aria-label="admin avatar"
+              className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center border border-gray-400 shadow"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="w-6 h-6 text-gray-700"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.5}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 20.25a8.25 8.25 0 0115 0v.75H4.5v-.75z" />
+              </svg>
+            </div>
+          </div>
+        </header>
 
         {/* Content area */}
         <section className="p-8 overflow-auto h-[calc(100vh-4rem)]">
-          {/* Page header */}
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-3xl font-bold text-gray-700">
               {activePage === "records" && "Student Records"}
@@ -147,6 +162,57 @@ export default function StudentHome() {
               {activePage === "pdf" && "PDF Files"}
             </h2>
           </div>
+
+          {/* ================= STUDENT RECORDS TABLE ================= */}
+          {activePage === "records" && (
+            <div className="overflow-x-auto border rounded bg-white shadow p-4">
+              <table className="min-w-full text-left">
+                <thead className="bg-gray-200">
+                  <tr>
+                    <th className="px-4 py-2">ID</th>
+                    <th className="px-4 py-2">Name</th>
+                    <th className="px-4 py-2">Student Number</th>
+                    <th className="px-4 py-2">Email</th>
+                    <th className="px-4 py-2">Phone</th>
+                    <th className="px-4 py-2">Course</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={6} className="text-center p-4">
+                        Loading...
+                      </td>
+                    </tr>
+                  ) : students.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="text-center p-4">
+                        No records found.
+                      </td>
+                    </tr>
+                  ) : (
+                    students
+                      .filter((s) =>
+                        query
+                          ? s.student_name.toLowerCase().includes(query.toLowerCase()) ||
+                            (s.student_number && s.student_number.includes(query))
+                          : true
+                      )
+                      .map((s) => (
+                        <tr key={s.record_id} className="border-b">
+                          <td className="px-4 py-2">{s.record_id}</td>
+                          <td className="px-4 py-2">{s.student_name}</td>
+                          <td className="px-4 py-2">{s.student_number}</td>
+                          <td className="px-4 py-2">{s.email}</td>
+                          <td className="px-4 py-2">{s.phone}</td>
+                          <td className="px-4 py-2">{s.course}</td>
+                        </tr>
+                      ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       </main>
     </div>
