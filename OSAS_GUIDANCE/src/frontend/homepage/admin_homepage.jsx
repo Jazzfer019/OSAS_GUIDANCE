@@ -949,62 +949,68 @@ useEffect(() => {
             </div>
           )}
 
-           {/* Search Students */}
+  {/* Search Students */}
 {activePage === "search" && (
   <div className="space-y-6">
 
-    {/* Search Input + Category */}
-    <div className="flex items-center space-x-2 max-w-xl">
-      {/* Search Icon */}
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        className="h-5 w-5 text-gray-400"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M21 21l-4.35-4.35M5 11a6 6 0 1112 0 6 6 0 01-12 0z"
-        />
-      </svg>
+    {/* Search Section (Side) */}
+    <div className="flex items-center space-x-4 w-full p-4">
 
       {/* Search Input */}
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search student..."
-        className="w-full pl-2 pr-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-      />
+      <div className="flex items-center space-x-2 w-3/8">
+        {/* Search Icon */}
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-5 w-5 text-gray-400"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M21 21l-4.35-4.35M5 11a6 6 0 1112 0 6 6 0 01-12 0z"
+          />
+        </svg>
+
+        {/* Search Input */}
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search student..."
+          className="w-full pl-3 pr-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+        />
+      </div>
 
       {/* Category Dropdown */}
       <select
         value={filterCategory}
         onChange={(e) => setFilterCategory(e.target.value)}
-        className="border border-gray-300 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+        className="border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
       >
         <option value="all">All</option>
         <option value="name">Name</option>
         <option value="id">ID</option>
         <option value="course">Course</option>
         <option value="violation">Violation</option>
+        <option value="gender">Gender</option>
         <option value="date">Date</option>
       </select>
     </div>
 
     {/* TABLE */}
-    <div className="bg-white shadow rounded-lg overflow-hidden">
+    <div className="bg-white shadow-lg rounded-lg overflow-hidden">
       <table className="w-full text-left">
         <thead className="bg-gray-200 text-gray-700">
           <tr>
             {(filterCategory === "all" || filterCategory === "id") && <th className="py-3 px-4">Student Number</th>}
             {(filterCategory === "all" || filterCategory === "name") && <th className="py-3 px-4">Student Name</th>}
-            {(filterCategory === "all") && <th className="py-3 px-4">Gender</th>}
+            {(filterCategory === "all" || filterCategory === "gender") && <th className="py-3 px-4">Gender</th>}
             {(filterCategory === "all" || filterCategory === "course") && <th className="py-3 px-4">Course/Year/Section</th>}
             {(filterCategory === "all" || filterCategory === "date") && <th className="py-3 px-4">Date</th>}
+            {(filterCategory === "all" || filterCategory === "violation") && <th className="py-3 px-4">Violation</th>}
             <th className="py-3 px-10">Actions</th>
           </tr>
         </thead>
@@ -1022,6 +1028,7 @@ useEffect(() => {
               const dateStr = v.violation_date
                 ? new Date(v.violation_date).toLocaleDateString("en-US")
                 : "";
+              const gender = v.gender?.toLowerCase() || "";
 
               switch (filterCategory) {
                 case "name":
@@ -1034,6 +1041,8 @@ useEffect(() => {
                   return violationText.includes(q);
                 case "date":
                   return dateStr.includes(q);
+                case "gender":
+                  return gender.includes(q); // Searching gender filter
                 case "all":
                 default:
                   return (
@@ -1041,7 +1050,8 @@ useEffect(() => {
                     studentId.includes(q) ||
                     course.includes(q) ||
                     violationText.includes(q) ||
-                    dateStr.includes(q)
+                    dateStr.includes(q) ||
+                    gender.includes(q)
                   );
               }
             });
@@ -1049,7 +1059,7 @@ useEffect(() => {
             if (filtered.length === 0) {
               return (
                 <tr>
-                  <td colSpan="6" className="text-center py-6 text-gray-500">
+                  <td colSpan="7" className="text-center py-6 text-gray-500">
                     No results found. Type to search...
                   </td>
                 </tr>
@@ -1069,14 +1079,18 @@ useEffect(() => {
               <tr key={idx} className="border-b last:border-b-0">
                 {(filterCategory === "all" || filterCategory === "id") && <td className="py-3 px-4">{v.student_id}</td>}
                 {(filterCategory === "all" || filterCategory === "name") && <td className="py-3 px-4">{v.student_name}</td>}
-                {(filterCategory === "all") && <td className="py-3 px-4">{v.gender}</td>}
+                {(filterCategory === "all" || filterCategory === "gender") && <td className="py-3 px-4">{v.gender}</td>}
                 {(filterCategory === "all" || filterCategory === "course") && <td className="py-3 px-4">{v.course_year_section}</td>}
                 {(filterCategory === "all" || filterCategory === "date") && <td className="py-3 px-4">{formatDate(v.violation_date)}</td>}
+                {(filterCategory === "all" || filterCategory === "violation") && <td className="py-3 px-4">{v.violation_text}</td>}
 
                 <td className="py-3 px-4">
                   <div className="flex gap-2">
                     <button
-                      onClick={() => viewStudentInfo(v)}
+                      onClick={() => {
+                        setCurrentViolation(v); // Set the clicked violation details
+                        setShowViolationDetailsModal(true); // Open modal
+                      }}
                       className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
                     >
                       View
@@ -1097,6 +1111,114 @@ useEffect(() => {
     </div>
   </div>
 )}
+
+{/* Modal for Viewing Violation Details */}
+{showViolationDetailsModal && currentViolation && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center">
+    {/* Full-screen solid black overlay */}
+    <div className="absolute inset-0 bg-black opacity-50"></div>
+
+    {/* Modal content */}
+    <div className="relative bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 z-10 overflow-y-auto max-h-[80vh]">
+      <button
+        onClick={() => setShowViolationDetailsModal(false)}
+        className="absolute top-4 right-4 text-gray-600 hover:text-gray-800"
+      >
+        ✕
+      </button>
+
+      <h3 className="text-2xl font-semibold text-gray-800 mb-4">Violation Details</h3>
+
+      <div className="space-y-4">
+        {/* Display Student Info */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Student Name</label>
+            <p className="text-lg text-gray-900">{currentViolation.student_name}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Student ID</label>
+            <p className="text-lg text-gray-900">{currentViolation.student_id}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Course/Year/Section</label>
+            <p className="text-lg text-gray-900">{currentViolation.course_year_section}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Gender</label>
+            <p className="text-lg text-gray-900">{currentViolation.gender}</p>
+          </div>
+        </div>
+
+        {/* Violation Info */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Violation</label>
+            <input
+              type="text"
+              value={currentViolation.predicted_violation || "—"}
+              readOnly
+              className="w-full p-3 border-2 border-gray-300 rounded-lg bg-gray-50 text-gray-700 focus:ring-2 focus:ring-green-500 text-lg"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Section</label>
+            <input
+              type="text"
+              value={currentViolation.predicted_section || "—"}
+              readOnly
+              className="w-full p-3 border-2 border-gray-300 rounded-lg bg-gray-50 text-gray-700 focus:ring-2 focus:ring-green-500 text-lg"
+            />
+          </div>
+        </div>
+
+        {/* Violation Text (Admin Note) */}
+        <div className="mb-4">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Violation Text (Admin Note)</label>
+          <textarea
+            value={currentViolation.violation_text || "No violation text available."}
+            readOnly
+            className="w-full p-3 border-2 border-gray-300 rounded-lg bg-gray-50 text-gray-700 resize-none"
+            rows={4}
+          />
+        </div>
+
+        {/* Standard Model-Generated Text */}
+        <div className="mb-4">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Standard Model-Generated Text</label>
+          <textarea
+            value={currentViolation.standard_text || "No standard violation text available."}
+            readOnly
+            className="w-full p-3 border-2 border-gray-300 rounded-lg bg-gray-50 text-gray-700 resize-none"
+            rows={4}
+          />
+        </div>
+
+        {/* Date (Read-Only) */}
+        <div className="mb-4">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Date</label>
+          <input
+            type="text"
+            value={currentViolation.formattedDate || "—"}
+            readOnly
+            className="w-full p-3 border-2 border-gray-300 rounded-lg bg-gray-50 text-gray-700 focus:ring-2 focus:ring-green-500 text-lg"
+          />
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-6 mt-6">
+        <button
+          onClick={() => setShowViolationDetailsModal(false)}
+          className="px-6 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
     {/* Encode Violation Section */}
 {activePage === "violation" && (
   <div className="space-y-4">
