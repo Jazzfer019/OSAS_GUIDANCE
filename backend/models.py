@@ -13,9 +13,8 @@ class Student(db.Model):
     student_name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(100), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
-    phone = db.Column(db.String(20))   # changed to String
-    course = db.Column(db.String(50))  # course field
-
+    phone = db.Column(db.String(20))
+    course = db.Column(db.String(50))
 
 
 # -----------------------------
@@ -27,7 +26,7 @@ class Admin(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(100), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
-    profile_pic = db.Column(db.String(255), nullable=True, default='default.png')  # Add profile_pic
+    profile_pic = db.Column(db.String(255), nullable=True, default='default.png')
 
 
 # -----------------------------
@@ -43,6 +42,12 @@ class Violation(db.Model):
     gender = db.Column(db.String(20), nullable=False)
     violation_text = db.Column(db.Text, nullable=False)
     violation_date = db.Column(db.Date, nullable=False, default=date.today)
+
+    # ML prediction fields
+    predicted_violation = db.Column(db.String(150), nullable=True)
+    predicted_section = db.Column(db.String(100), nullable=True)
+    predictive_text = db.Column(db.Text, nullable=True)  # Optional: store top-3 predictive text
+    standard_text = db.Column(db.Text, nullable=True)    # Optional: store standard dataset text
 
 
 # -----------------------------

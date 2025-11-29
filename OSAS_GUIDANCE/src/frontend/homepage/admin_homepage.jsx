@@ -8,6 +8,10 @@ export default function AdminHome() {
   const [query, setQuery] = useState("");
   const [rssItems, setRssItems] = useState([]);
   const [loadingRss, setLoadingRss] = useState(false);
+
+  // sa taas ng AdminHome component
+const [predictedViolation, setPredictedViolation] = useState("");
+const [predictedSection, setPredictedSection] = useState("");
   // Upload File State
 const [currentGoodMoral, setCurrentGoodMoral] = useState(null);
 const [currentRules, setCurrentRules] = useState(null);
@@ -36,6 +40,13 @@ const [currentRules, setCurrentRules] = useState(null);
   const [showAccountDropdown, setShowAccountDropdown] = useState(false);
   //filtered
    const [filterCategory, setFilterCategory] = useState("all"); // all, name, id, course, date, violation 
+   const [predictiveText, setPredictiveText] = useState(""); // top-3 text from model
+   const [standardText, setStandardText] = useState(""); // Default value is an empty string
+   const [showViolationDetailsModal, setShowViolationDetailsModal] = useState(false);
+   const [currentViolation, setCurrentViolation] = useState(null);
+
+   
+
 
 useEffect(() => {
   const handleClickOutside = (e) => {
@@ -58,6 +69,7 @@ useEffect(() => {
     { month: "Jun", cases: 0 },
   ];
 
+  
   //email
 const [profilePicPreview, setProfilePicPreview] = useState(null);
 const [user, setUser] = useState({ name: "", email: "", profile_pic:"" });
@@ -118,6 +130,7 @@ const uploadFile = async (file, fileType) => {
     return null;
   }
 };
+
 
 // Function to list all uploaded files
 const listFiles = async () => {
@@ -372,17 +385,9 @@ const handlePreviewFile = (file) => {
       }
     });
   }
-
-// ------------------ Submit Violation ------------------
 async function handleSubmitViolation() {
-  if (
-    !studentName ||
-    !studentId ||
-    !courseYearSection ||
-    !gender ||
-    !violationText ||
-    !violationDate
-  ) {
+  // Check if all fields are filled out
+  if (!studentName || !studentId || !courseYearSection || !gender || !violationText || !violationDate) {
     Swal.fire({
       icon: "warning",
       title: "Missing Fields",
@@ -391,29 +396,50 @@ async function handleSubmitViolation() {
     return;
   }
 
-  // Convert YYYY-MM-DD → MM/DD/YY
+  // Convert YYYY-MM-DD → MM/DD/YY for formatting
   const parts = violationDate.split("-");
-  if (parts.length !== 3) {
-    Swal.fire({
-      icon: "error",
-      title: "Invalid Date",
-      text: "Please enter date in YYYY-MM-DD format.",
-    });
-    return;
-  }
-
-  const formattedDate = `${parts[1]}/${parts[2]}/${parts[0].slice(2)}`; // "MM/DD/YY"
-
-  const newViolation = {
-    student_name: studentName,
-    student_id: parseInt(studentId, 10),
-    course_year_section: courseYearSection,
-    gender,
-    violation_text: violationText,
-    violation_date: formattedDate,
-  };
+  const formattedDate = `${parts[1]}/${parts[2]}/${parts[0].slice(-2)}`; // "MM/DD/YY"
 
   try {
+    // ---------------- Prediction Call ----------------
+    const predictRes = await fetch("http://127.0.0.1:5000/predict", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: violationText }),
+    });
+    const predictData = await predictRes.json();
+
+    // Log the prediction data for debugging
+    console.log('Prediction Response:', predictData);
+
+    if (!predictRes.ok) {
+      Swal.fire({
+        icon: "error",
+        title: "Prediction Failed",
+        text: predictData?.error || "Could not predict violation.",
+      });
+      return;
+    }
+
+    // ---------------- Build Payload ----------------
+    const newViolation = {
+      student_name: studentName,
+      student_id: parseInt(studentId, 10),
+      course_year_section: courseYearSection,
+      gender,
+      violation_text: violationText,
+      violation_date: formattedDate,
+      predicted_violation: (predictData.predicted_violation !== null && predictData.predicted_violation !== undefined)
+        ? predictData.predicted_violation : "No predicted violation", // Check if not null or undefined
+      predicted_section: (predictData.predicted_section !== null && predictData.predicted_section !== undefined)
+        ? predictData.predicted_section : "No predicted section", // Check if not null or undefined
+      predictive_text: (predictData.predictive_text !== null && predictData.predictive_text !== undefined)
+        ? predictData.predictive_text : "No predictive text available", // Check for null/undefined
+      standard_text: (predictData.standard_text !== null && predictData.standard_text !== undefined)
+        ? predictData.standard_text : "No standard violation text available", // Check for null/undefined
+    };
+
+    // ---------------- Submit to Backend ----------------
     const res = await fetch("http://localhost:5000/violations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -421,8 +447,8 @@ async function handleSubmitViolation() {
     });
     const data = await res.json();
 
+    // Handle successful submission
     if (res.ok) {
-      // ✅ Top-right toast
       Swal.fire({
         toast: true,
         position: "top-end",
@@ -433,8 +459,8 @@ async function handleSubmitViolation() {
         timerProgressBar: true,
       });
 
-      setShowViolationModal(false);
-      // reset fields
+      setShowViolationModal(false);  // Close the modal
+      // Reset fields
       setStudentName("");
       setStudentId("");
       setCourseYearSection("");
@@ -443,8 +469,9 @@ async function handleSubmitViolation() {
       setViolationDate("");
       setStudentInfo(null);
 
-      await fetchViolations(); // refresh list
+      await fetchViolations(); // Refresh the list of violations
     } else {
+      // Handle error when submission fails
       Swal.fire({
         icon: "error",
         title: "Error",
@@ -452,10 +479,13 @@ async function handleSubmitViolation() {
       });
     }
   } catch (err) {
+    // Handle any unexpected errors
     console.error(err);
     Swal.fire({ icon: "error", title: "Error", text: "Failed to submit violation." });
   }
 }
+
+
 
 
   // ------------------ View Student Info (opens modal) ------------------
@@ -919,449 +949,513 @@ useEffect(() => {
             </div>
           )}
 
-              {/* Search Students */}
-            {activePage === "search" && (
-              <div className="space-y-6">
+           {/* Search Students */}
+{activePage === "search" && (
+  <div className="space-y-6">
 
-                {/* Search Input + Category */}
-                <div className="flex items-center space-x-2 max-w-xl">
-                  {/* Search Icon */}
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5 text-gray-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 21l-4.35-4.35M5 11a6 6 0 1112 0 6 6 0 01-12 0z"
-                    />
-                  </svg>
+    {/* Search Input + Category */}
+    <div className="flex items-center space-x-2 max-w-xl">
+      {/* Search Icon */}
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        className="h-5 w-5 text-gray-400"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M21 21l-4.35-4.35M5 11a6 6 0 1112 0 6 6 0 01-12 0z"
+        />
+      </svg>
 
-                  {/* Search Input */}
-                  <input
-                    type="text"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search student..."
-                    className="w-full pl-2 pr-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
+      {/* Search Input */}
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search student..."
+        className="w-full pl-2 pr-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+      />
 
-                  {/* Category Dropdown */}
-                  <select
-                    value={filterCategory}
-                    onChange={(e) => setFilterCategory(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
-                  >
-                    <option value="all">All</option>
-                    <option value="name">Name</option>
-                    <option value="id">ID</option>
-                    <option value="course">Course</option>
-                    <option value="violation">Violation</option>
-                    <option value="date">Date</option>
-                  </select>
-                </div>
+      {/* Category Dropdown */}
+      <select
+        value={filterCategory}
+        onChange={(e) => setFilterCategory(e.target.value)}
+        className="border border-gray-300 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+      >
+        <option value="all">All</option>
+        <option value="name">Name</option>
+        <option value="id">ID</option>
+        <option value="course">Course</option>
+        <option value="violation">Violation</option>
+        <option value="date">Date</option>
+      </select>
+    </div>
 
-                {/* TABLE */}
-                <div className="bg-white shadow rounded-lg overflow-hidden">
-                  <table className="w-full text-left">
+    {/* TABLE */}
+    <div className="bg-white shadow rounded-lg overflow-hidden">
+      <table className="w-full text-left">
+        <thead className="bg-gray-200 text-gray-700">
+          <tr>
+            {(filterCategory === "all" || filterCategory === "id") && <th className="py-3 px-4">Student Number</th>}
+            {(filterCategory === "all" || filterCategory === "name") && <th className="py-3 px-4">Student Name</th>}
+            {(filterCategory === "all") && <th className="py-3 px-4">Gender</th>}
+            {(filterCategory === "all" || filterCategory === "course") && <th className="py-3 px-4">Course/Year/Section</th>}
+            {(filterCategory === "all" || filterCategory === "date") && <th className="py-3 px-4">Date</th>}
+            <th className="py-3 px-10">Actions</th>
+          </tr>
+        </thead>
 
-                    {/* TABLE HEADERS */}
-                    <thead className="bg-gray-200 text-gray-700">
-                      <tr>
-                        {(filterCategory === "all" || filterCategory === "id") && <th className="py-3 px-4">Student Number</th>}
-                        {(filterCategory === "all" || filterCategory === "name") && <th className="py-3 px-4">Student Name</th>}
-                        {(filterCategory === "all") && <th className="py-3 px-4">Gender</th>}
-                        {(filterCategory === "all" || filterCategory === "course") && <th className="py-3 px-4">Course/Year/Section</th>}
-                        {(filterCategory === "all" || filterCategory === "violation") && <th className="py-3 px-20">Description</th>}
-                        {(filterCategory === "all") && <th className="py-3 px-4">Section</th>}
-                        {(filterCategory === "all") && <th className="py-3 px-4">Violation</th>}
-                        {(filterCategory === "all" || filterCategory === "date") && <th className="py-3 px-4">Date</th>}
-                        <th className="py-3 px-10">Actions</th>
-                      </tr>
-                    </thead>
+        <tbody>
+          {(() => {
+            const filtered = violations.filter((v) => {
+              const q = (query || "").toLowerCase();
+              if (!q) return true;
 
-                    {/* TABLE BODY */}
-                    <tbody>
-                      {(() => {
-                        const filtered = violations.filter((v) => {
-                          const q = (query || "").toLowerCase();
-                          if (!q) return true;
+              const studentName = (v.student_name || "").toLowerCase();
+              const studentId = String(v.student_id || "");
+              const course = (v.course_year_section || "").toLowerCase();
+              const violationText = (v.violation_text || "").toLowerCase();
+              const dateStr = v.violation_date
+                ? new Date(v.violation_date).toLocaleDateString("en-US")
+                : "";
 
-                          const studentName = (v.student_name || "").toLowerCase();
-                          const studentId = String(v.student_number || "");
-                          const course = (v.course_year_section || "").toLowerCase();
-                          const violationText = (v.violation_text || "").toLowerCase();
-                          const dateStr = v.violation_date
-                            ? new Date(v.violation_date).toLocaleDateString("en-US")
-                            : "";
+              switch (filterCategory) {
+                case "name":
+                  return studentName.includes(q);
+                case "id":
+                  return studentId.includes(q);
+                case "course":
+                  return course.includes(q);
+                case "violation":
+                  return violationText.includes(q);
+                case "date":
+                  return dateStr.includes(q);
+                case "all":
+                default:
+                  return (
+                    studentName.includes(q) ||
+                    studentId.includes(q) ||
+                    course.includes(q) ||
+                    violationText.includes(q) ||
+                    dateStr.includes(q)
+                  );
+              }
+            });
 
-                          switch (filterCategory) {
-                            case "name":
-                              return studentName.includes(q);
-                            case "id":
-                              return studentId.includes(q);
-                            case "course":
-                              return course.includes(q);
-                            case "violation":
-                              return violationText.includes(q);
-                            case "date":
-                              return dateStr.includes(q);
-                            case "all":
-                            default:
-                              return (
-                                studentName.includes(q) ||
-                                studentId.includes(q) ||
-                                course.includes(q) ||
-                                violationText.includes(q) ||
-                                dateStr.includes(q)
-                              );
-                          }
-                        });
+            if (filtered.length === 0) {
+              return (
+                <tr>
+                  <td colSpan="6" className="text-center py-6 text-gray-500">
+                    No results found. Type to search...
+                  </td>
+                </tr>
+              );
+            }
 
-                        if (filtered.length === 0) {
-                          return (
-                            <tr>
-                              <td colSpan="9" className="text-center py-6 text-gray-500">
-                                No results found. Type to search...
-                              </td>
-                            </tr>
-                          );
-                        }
+            const formatDate = (dateStr) => {
+              if (!dateStr) return "";
+              const date = new Date(dateStr);
+              const mm = String(date.getMonth() + 1).padStart(2, "0");
+              const dd = String(date.getDate()).padStart(2, "0");
+              const yy = String(date.getFullYear()).slice(-2);
+              return `${mm}/${dd}/${yy}`;
+            };
 
-                        const formatDate = (dateStr) => {
-                          if (!dateStr) return "";
-                          const date = new Date(dateStr);
-                          const mm = String(date.getMonth() + 1).padStart(2, "0");
-                          const dd = String(date.getDate()).padStart(2, "0");
-                          const yy = String(date.getFullYear()).slice(-2);
-                          return `${mm}/${dd}/${yy}`;
-                        };
+            return filtered.map((v, idx) => (
+              <tr key={idx} className="border-b last:border-b-0">
+                {(filterCategory === "all" || filterCategory === "id") && <td className="py-3 px-4">{v.student_id}</td>}
+                {(filterCategory === "all" || filterCategory === "name") && <td className="py-3 px-4">{v.student_name}</td>}
+                {(filterCategory === "all") && <td className="py-3 px-4">{v.gender}</td>}
+                {(filterCategory === "all" || filterCategory === "course") && <td className="py-3 px-4">{v.course_year_section}</td>}
+                {(filterCategory === "all" || filterCategory === "date") && <td className="py-3 px-4">{formatDate(v.violation_date)}</td>}
 
-                        return filtered.map((v, idx) => (
-                          <tr key={idx} className="border-b last:border-b-0">
-                            {(filterCategory === "all" || filterCategory === "id") && <td className="py-3 px-4">{v.student_id}</td>}
-                            {(filterCategory === "all" || filterCategory === "name") && <td className="py-3 px-4">{v.student_name}</td>}
-                            {(filterCategory === "all") && <td className="py-3 px-4">{v.gender}</td>}
-                            {(filterCategory === "all" || filterCategory === "course") && <td className="py-3 px-4">{v.course_year_section}</td>}
-                            {(filterCategory === "all" || filterCategory === "violation") && (
-                              <td className="py-3 px-20 max-w-xs">
-                                <span className="block truncate">
-                                  {(v.violation_text || "").length > 15
-                                    ? (v.violation_text || "").slice(0, 15) + "..."
-                                    : v.violation_text || ""}
-                                </span>
-                              </td>
-                            )}
-                            {(filterCategory === "all") && <td className="py-3 px-4"></td>}
-                            {(filterCategory === "all") && <td className="py-3 px-4"></td>}
-                            {(filterCategory === "all" || filterCategory === "date") && <td className="py-3 px-1">{formatDate(v.violation_date)}</td>}
+                <td className="py-3 px-4">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => viewStudentInfo(v)}
+                      className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
+                    >
+                      View
+                    </button>
+                    <button
+                      onClick={() => handleDeleteViolation(v)}
+                      className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ));
+          })()}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
+    {/* Encode Violation Section */}
+{activePage === "violation" && (
+  <div className="space-y-4">
+    {/* Button to open modal */}
+    <div className="mb-6">
+      <button
+        onClick={() => setShowViolationModal(true)}
+        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+      >
+        Encode New Violation
+      </button>
+    </div>
 
-                            <td className="py-3 px-4">
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => viewStudentInfo(v)}
-                                  className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
-                                >
-                                  View
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteViolation(v)}
-                                  className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ));
-                      })()}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+    {/* Violation Modal for Submission */}
+    {showViolationModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        {/* Full-screen solid black overlay */}
+        <div className="absolute inset-0 bg-black opacity-70"></div>
 
-        {/* Encode Violation Section */}
-        {activePage === "violation" && (
-          <div className="space-y-0">
-            {/* Button to open modal */}
-            <div className="mb-6">
-              <button
-                onClick={() => setShowViolationModal(true)}
-                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
-              >
-                Encode New Violation
-              </button>
+        {/* Modal content */}
+        <div className="relative bg-white rounded-xl shadow-lg w-full max-w-2xl p-6 z-10 overflow-y-auto max-h-[90vh]">
+          <button
+            onClick={() => {
+              setShowViolationModal(false);
+              setStudentInfo(null);
+            }}
+            className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
+          >
+            ✕
+          </button>
+
+          <h3 className="text-2xl font-semibold text-gray-700 mb-6">Encode Student Violation</h3>
+
+          {/* Form Fields */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Student Name</label>
+              <input
+                type="text"
+                value={studentName}
+                onChange={(e) => setStudentName(e.target.value)}
+                placeholder="Enter student full name"
+                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
             </div>
-
-            
-          {/* Violation Modal */}
-            {showViolationModal && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center">
-                {/* Full-screen solid black overlay */}
-                <div className="absolute inset-0 bg-black opacity-70"></div>
-
-                              {/* Modal content */}
-                <div className="relative bg-white rounded-xl shadow-lg w-full max-w-2xl p-6 z-10 overflow-y-auto max-h-[90vh]">
-                  <button
-                    onClick={() => {
-                      setShowViolationModal(false);
-                      setStudentInfo(null);
-                    }}
-                    className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
-                  >
-                    ✕
-                  </button>
-
-                  <h3 className="text-2xl font-semibold text-gray-700 mb-6">
-                    Encode Student Violation
-                  </h3>
-                      {/* Form Fields */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Student Name</label>
-                          <input
-                            type="text"
-                            value={studentName}
-                            onChange={(e) => setStudentName(e.target.value)}
-                            placeholder="Enter student full name"
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Student Number</label>
-                          <input
-                            type="number"
-                            value={studentId}
-                            onChange={(e) => setStudentId(e.target.value)}
-                            placeholder="Enter student number"
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Course/Year/Section</label>
-                          <input
-                            type="text"
-                            value={courseYearSection}
-                            onChange={(e) => setCourseYearSection(e.target.value)}
-                            placeholder="Enter Course/Year/Section"
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-                          <select
-                            value={gender}
-                            onChange={(e) => setGender(e.target.value)}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                          >
-                            <option value="">Select gender</option>
-                            <option value="Male">Male</option>
-                            <option value="Female">Female</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      {/* Violation Text */}
-                      <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                         Interview Text
-                        </label>
-                        <textarea
-                          value={violationText}
-                          onChange={(e) => setViolationText(e.target.value)}
-                          placeholder="Write interview details or violation text…"
-                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                          rows={5}
-                        />
-                      </div>
-
-                      {/* Date (auto-filled to current date) */}
-                      <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                       <input
-                          type="date"
-                          value={violationDate}
-                           className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                          onChange={(e) => setViolationDate(e.target.value)}
-                        />
-
-                      </div>
-
-                      {/* Buttons */}
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => {
-                            setShowViolationModal(false);
-                            setStudentInfo(null);
-                          }}
-                          className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={handleSubmitViolation}
-                          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
-                        >
-                          Submit Violation
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-              {/* Violation Cards */}
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {violations.length === 0 ? (
-              <p className="text-gray-500 col-span-full">No violation records yet.</p>
-            ) : (
-              violations.map((v, idx) => {
-                // Format violation date to MM/DD/YY
-                const date = new Date(v.violation_date);
-                const mm = String(date.getMonth() + 1).padStart(2, "0");
-                const dd = String(date.getDate()).padStart(2, "0");
-                const yy = String(date.getFullYear()).slice(-2);
-                const formattedDate = `${mm}/${dd}/${yy}`;
-
-                return (
-                  <div
-                    key={idx}
-                    className="bg-white p-5 rounded-xl shadow-lg hover:shadow-xl transition-shadow cursor-pointer"
-                    onClick={() => viewStudentInfo(v)}
-                  >
-                    <p className="font-semibold text-gray-700 text-lg mb-2">
-                      {v.student_name} (Number: {v.student_id})</p>
-                    <p className="text-gray-600 mb-1">Gender: {v.gender}</p>
-                    <p className="text-gray-600 mb-1">CYS: {v.course_year_section}</p>
-
-                    {/* DESCRIPTION (truncated to prevent overflow) */}
-                    <p className="text-gray-600 mb-1 truncate max-w-full" title={v.violation_text}>
-                     Admin Note: {v.violation_text}
-                    </p>
-
-                    {/* SECTION */}
-                    <p className="text-gray-600 mb-1">Section: {v.section || "—"}</p>
-
-                    {/* VIOLATION */}
-                    <p className="text-gray-600 mb-2">Violation: {v.violation || "—"}</p>
-
-                    <p className="text-sm text-gray-400">Date: {formattedDate}</p>
-                  </div>
-                );
-              })
-            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Student Number</label>
+              <input
+                type="number"
+                value={studentId}
+                onChange={(e) => setStudentId(e.target.value)}
+                placeholder="Enter student number"
+                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Course/Year/Section</label>
+              <input
+                type="text"
+                value={courseYearSection}
+                onChange={(e) => setCourseYearSection(e.target.value)}
+                placeholder="Enter Course/Year/Section"
+                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+              <select
+                value={gender}
+                onChange={(e) => setGender(e.target.value)}
+                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                <option value="">Select gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
           </div>
-             </div>
-                     )}
 
-                  {/* Student Info Modal (from Search -> View) */}
-                  {showStudentModal && selectedStudent && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                      <div className="bg-white w-full max-w-2xl rounded-xl shadow-xl p-6 relative">
-                        
-                        {/* CLOSE BUTTON */}
-                        <button
-                          onClick={() => {
-                            setShowStudentModal(false);
-                            setSelectedStudent(null);
-                          }}
-                          className="absolute top-4 right-4 text-gray-600 hover:text-black"
-                        >
-                          ✕
-                        </button>
+          {/* Violation Text */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Interview Text</label>
+            <textarea
+              value={violationText}
+              onChange={async (e) => {
+                const value = e.target.value;
+                setViolationText(value);
 
-                        {/* TITLE */}
-                        <h2 className="text-2xl font-bold text-gray-700 mb-4">Student Information</h2>
+                if (value.trim() !== "") {
+                  try {
+                    const res = await fetch("http://127.0.0.1:5000/predict", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ text: value }),
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                      setPredictedViolation(data.predicted_violation || "—");
+                      setPredictedSection(data.predicted_section || "—");
+                      setPredictiveText(data.predictive_text || "—");
+                      setStandardText(data.standard_text || "No standard violation text available.");
+                    }
+                  } catch (err) {
+                    console.error("Prediction error:", err);
+                    setPredictedViolation("—");
+                    setPredictedSection("—");
+                    setPredictiveText("—");
+                    setStandardText("No standard violation text available.");
+                  }
+                } else {
+                  setPredictedViolation("—");
+                  setPredictedSection("—");
+                  setPredictiveText("—");
+                  setStandardText("No standard violation text available.");
+                }
+              }}
+              placeholder="Write interview details or violation text…"
+              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              rows={5}
+            />
+          </div>
 
-                        {/* BASIC STUDENT INFO */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-sm text-gray-500">Student No.</p>
-                            <p className="font-medium">{selectedStudent.student_id}</p>
-                          </div>
+          {/* Display Predicted Violation & Section */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Predicted Violation</label>
+              <input
+                type="text"
+                readOnly
+                value={predictedViolation || "—"}
+                className="w-full p-2 border rounded-lg bg-gray-100"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Predicted Section</label>
+              <input
+                type="text"
+                readOnly
+                value={predictedSection || "—"}
+                className="w-full p-2 border rounded-lg bg-gray-100"
+              />
+            </div>
+          </div>
 
-                          <div>
-                            <p className="text-sm text-gray-500">Name</p>
-                            <p className="font-medium">{selectedStudent.student_name}</p>
-                          </div>
+          {/* Display Predictive Text */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Predictive Text (Top-3)</label>
+            <textarea
+              value={predictiveText || "—"}
+              readOnly
+              className="w-full p-2 border rounded-lg bg-gray-100 resize-none"
+              rows={3}
+            />
+          </div>
 
-                          <div>
-                            <p className="text-sm text-gray-500">Gender</p>
-                            <p className="font-medium">{selectedStudent.gender}</p>
-                          </div>
+          {/* Display Standard Text */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Standard Model-Generated Text</label>
+            <textarea
+              value={standardText || "No standard violation text available."}
+              readOnly
+              className="w-full p-2 border rounded-lg bg-gray-100 resize-none"
+              rows={3}
+            />
+          </div>
 
-                          <div>
-                            <p className="text-sm text-gray-500">Course/Year/Section</p>
-                            <p className="font-medium">{selectedStudent.course_year_section}</p>
-                          </div>
-                        </div>
+          {/* Date (auto-filled to current date) */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+            <input
+              type="date"
+              value={violationDate}
+              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              onChange={(e) => setViolationDate(e.target.value)}
+            />
+          </div>
 
-                        <hr className="my-4" />
+          {/* Buttons */}
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => {
+                setShowViolationModal(false);
+                setStudentInfo(null);
+              }}
+              className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmitViolation}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+            >
+              Submit Violation
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
-                        {/* 🔥 FULL DESCRIPTION FIELD */}
-                        <div className="mb-4">
-                          <p className="text-sm text-gray-500">Admin Note</p>
-                          <textarea
-                            readOnly
-                            rows={3}
-                            className="w-full border border-gray-300 rounded p-2"
-                            value={selectedStudent.violation_text  || ""}
-                          />
-                        </div>
+    {/* Violation Cards */}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+      {violations.length === 0 ? (
+        <p className="text-gray-500 col-span-full">No violation records yet.</p>
+      ) : (
+       violations.map((v, idx) => {
+  // Format violation date to MM/DD/YY
+  const date = new Date(v.violation_date);
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  const yy = String(date.getFullYear()).slice(-2);
+  const formattedDate = `${mm}/${dd}/${yy}`;
 
-                        {/* 🔥 SECTION FIELD */}
-                        <div className="mb-4">
-                          <p className="text-sm text-gray-500">Section</p>
-                          <input
-                            readOnly
-                            className="w-full border border-gray-300 rounded p-2"
-                            value={selectedStudent.student  || "—"}
-                          />
-                        </div>
+  return (
+    <div
+      key={idx}
+      className="bg-white p-5 rounded-xl shadow-lg hover:shadow-xl transition-shadow cursor-pointer"
+      onClick={() => {
+        // Pass formattedDate with the violation
+        setCurrentViolation({ ...v, formattedDate });
+        setShowViolationDetailsModal(true); // Open modal
+      }}
+    >
+      <p className="font-semibold text-gray-700 text-lg mb-2">
+        {v.student_name} (Number: {v.student_id})
+      </p>
+      <p className="text-gray-600 mb-1">Gender: {v.gender}</p>
+      <p className="text-gray-600 mb-1">CYS: {v.course_year_section}</p>
 
-                        {/* 🔥 VIOLATION FIELD */}
-                        <div className="mb-4">
-                          <p className="text-sm text-gray-500">Violation</p>
-                          <input
-                            readOnly
-                            className="w-full border border-gray-300 rounded p-2"
-                            value={selectedStudent.student || "—"}
-                          />
-                        </div>
+      {/* DESCRIPTION (truncated to prevent overflow) */}
+      <p className="text-gray-600 mb-1 truncate" title={v.violation_text}>
+        Admin Note: {v.violation_text}
+      </p>
 
-                        {/* 🔥 DATE OF VIOLATION (NEW) */}
-                        <div className="mb-4">
-                          <p className="text-sm text-gray-500">Date of Violation</p>
-                          <input
-                            readOnly
-                            className="w-full border border-gray-300 rounded p-2"
-                            value={
-                              selectedStudent.violation_date
-                                ? new Date(selectedStudent.violation_date).toLocaleDateString()
-                                : "—"
-                            }
-                          />
-                        </div>
+      {/* SECTION */}
+      <p className="text-gray-600 mb-1">Section: {v.predicted_section || "—"}</p>
 
-                        {/* CLOSE BUTTON */}
-                        <div className="mt-4 flex justify-end">
-                          <button
-                            onClick={() => {
-                              setShowStudentModal(false);
-                              setSelectedStudent(null);
-                            }}
-                            className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors"
-                          >
-                            Close
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+      {/* VIOLATION */}
+      <p className="text-gray-600 mb-2">Violation: {v.predicted_violation || "—"}</p>
+
+      <p className="text-sm text-gray-400">Date: {formattedDate}</p>
+    </div>
+  );
+})
+
+      )}
+    </div>
+
+  {/* Modal for Viewing Violation Details */}
+{showViolationDetailsModal && currentViolation && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center">
+    {/* Full-screen solid black overlay */}
+    <div className="absolute inset-0 bg-black opacity-70"></div>
+
+    {/* Modal content */}
+    <div className="relative bg-white rounded-xl shadow-lg w-full max-w-2xl p-6 z-10 overflow-y-auto max-h-[90vh]">
+      <button
+        onClick={() => setShowViolationDetailsModal(false)}
+        className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"
+      >
+        ✕
+      </button>
+
+      <h3 className="text-2xl font-semibold text-gray-700 mb-6">Violation Details</h3>
+
+      <div className="space-y-4">
+        {/* Display Student Info in a Formal Layout */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Student Name</label>
+            <p className="text-gray-700">{currentViolation.student_name}</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Student ID</label>
+            <p className="text-gray-700">{currentViolation.student_id}</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Course/Year/Section</label>
+            <p className="text-gray-700">{currentViolation.course_year_section}</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+            <p className="text-gray-700">{currentViolation.gender}</p>
+          </div>
+        </div>
+
+        {/* Display Violation Info (Editable or Read-Only Fields) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Violation</label>
+            <input
+              type="text"
+              value={currentViolation.predicted_violation || "—"}
+              readOnly
+              className="w-full p-2 border rounded-lg bg-gray-100"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
+            <input
+              type="text"
+              value={currentViolation.predicted_section || "—"}
+              readOnly
+              className="w-full p-2 border rounded-lg bg-gray-100"
+            />
+          </div>
+        </div>
+
+        {/* Violation Text (Admin Note) */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Violation Text (Admin Note)</label>
+          <textarea
+            value={currentViolation.violation_text || "No violation text available."}
+            readOnly
+            className="w-full p-2 border rounded-lg bg-gray-100 resize-none"
+            rows={3}
+          />
+        </div>
+
+        {/* Standard Model-Generated Text */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Standard Model-Generated Text</label>
+          <textarea
+            value={currentViolation.standard_text || "No standard violation text available."}
+            readOnly
+            className="w-full p-2 border rounded-lg bg-gray-100 resize-none"
+            rows={3}
+          />
+        </div>
+
+        {/* Date (Editable) */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+          <input
+            type="text"
+            value={currentViolation.formattedDate || "—"}
+            readOnly
+            className="w-full p-2 border rounded-lg bg-gray-100"
+          />
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 mt-6">
+        <button
+          onClick={() => setShowViolationDetailsModal(false)}
+          className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+  </div>
+)}
 
                  {/* ===== Upload File Section ===== */}
                   {activePage === "uploadFileFormat" && (
@@ -1723,7 +1817,7 @@ useEffect(() => {
                             <XMarkIcon className="w-6 h-6" />
                           </button>
                           <h3 className="text-lg font-semibold mb-4">Student Details</h3>
-                          <p><strong>Name:</strong> {viewStudent.student_name}</p>
+                          <p><strong>Name:</strong> {viewStudentI.student_name}</p>
                           <p><strong>Number:</strong> {viewStudent.student_number}</p>
                           <p><strong>Email:</strong> {viewStudent.email}</p>
                           <p><strong>Phone:</strong> {viewStudent.phone}</p>
