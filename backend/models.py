@@ -1,3 +1,4 @@
+
 from app import db
 from datetime import date, datetime
 from extension import db  # Use the db instance from extension.py

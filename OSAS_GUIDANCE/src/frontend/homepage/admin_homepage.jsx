@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from "react";
 import {ChartBarIcon,NewspaperIcon,MagnifyingGlassIcon,PencilSquareIcon,ArrowRightOnRectangleIcon,UserGroupIcon,UserCircleIcon,DocumentPlusIcon, XMarkIcon, EyeIcon, TrashIcon} from "@heroicons/react/24/solid";
 import Swal from "sweetalert2";
@@ -1199,7 +1200,7 @@ useEffect(() => {
           <label className="block text-sm font-semibold text-gray-700 mb-2">Date</label>
           <input
             type="text"
-            value={currentViolation.formattedDate || "—"}
+            value={currentViolation.violation_date || "—"}
             readOnly
             className="w-full p-3 border-2 border-gray-300 rounded-lg bg-gray-50 text-gray-700 focus:ring-2 focus:ring-green-500 text-lg"
           />
@@ -1939,7 +1940,7 @@ useEffect(() => {
                             <XMarkIcon className="w-6 h-6" />
                           </button>
                           <h3 className="text-lg font-semibold mb-4">Student Details</h3>
-                          <p><strong>Name:</strong> {viewStudentI.student_name}</p>
+                          <p><strong>Name:</strong> {viewStudent.student_name}</p>
                           <p><strong>Number:</strong> {viewStudent.student_number}</p>
                           <p><strong>Email:</strong> {viewStudent.email}</p>
                           <p><strong>Phone:</strong> {viewStudent.phone}</p>

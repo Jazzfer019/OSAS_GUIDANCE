@@ -10,21 +10,30 @@ import string
 import numpy as np
 
 # 2️⃣ Load dataset
-df = pd.read_excel(r"C:\Users\Harold Arevalo\Downloads\cvsu_violation_dataset_fixed.xlsx")
+df = pd.read_excel(r"C:\Users\Harold Arevalo\Downloads\cvsu_violation_updated_dataset.xlsx")
+
+# Handle missing values and ensure 'violation' is in string format
+df = df.dropna(subset=['violation'])  # Drop rows where 'violation' is NaN
+df['violation'] = df['violation'].astype(str)  # Ensure 'violation' is string type
+
+# Extract texts and labels
 texts = df['text']
 labels = df['violation']
-sections = df['section']  # Extract section column
 
 # 3️⃣ Check dataset
 print("Dataset preview:")
 print(df.head())
 print(f"Total rows: {df.shape[0]}\n")
 
-# 4️⃣ Preprocessing
+# 4️⃣ Preprocessing function
 def preprocess(text):
-    """Lowercase and remove punctuation"""
-    return text.lower().translate(str.maketrans('', '', string.punctuation))
+    """Lowercase and remove punctuation, handle non-string values"""
+    if isinstance(text, str):  # Ensure the text is a string
+        return text.lower().translate(str.maketrans('', '', string.punctuation))
+    else:
+        return ''  # Return empty string for non-string values
 
+# Apply preprocessing
 texts = texts.apply(preprocess)
 
 # 5️⃣ Train/test split
@@ -39,7 +48,7 @@ X_test_tfidf = vectorizer.transform(X_test)
 
 # 7️⃣ Train Linear SVM (with probabilities)
 base_model = LinearSVC()
-model = CalibratedClassifierCV(base_model)  # enable predict_proba
+model = CalibratedClassifierCV(base_model)  # Enable predict_proba for probability outputs
 model.fit(X_train_tfidf, y_train)
 
 # 8️⃣ Evaluation
@@ -63,28 +72,27 @@ print("✅ Violation → Section mapping saved successfully!")
 
 # 1️⃣1️⃣ Save violation → standard text
 # Get FIRST example text for each violation
-violation_to_standard_text = (
-    df.groupby("violation")["text"].first().to_dict()
-)
+violation_to_standard_text = df.groupby("violation")["text"].first().to_dict()
 
 joblib.dump(violation_to_standard_text, "violation_to_standard_text.pkl")
 print("✅ Violation → Standard Text mapping saved successfully!")
 
 # 1️⃣2️⃣ Prediction Function
 def predict_violation(sentence, top_n=3):
-    sentence_proc = preprocess(sentence)
-    vectorized = vectorizer.transform([sentence_proc])
-    pred = model.predict(vectorized)[0]
+    sentence_proc = preprocess(sentence)  # Preprocess the input sentence
+    vectorized = vectorizer.transform([sentence_proc])  # Vectorize the input sentence
+    pred = model.predict(vectorized)[0]  # Predict the violation label
 
     # Predictive text (top N)
     if hasattr(model, "predict_proba"):
-        probs = model.predict_proba(vectorized)[0]
+        probs = model.predict_proba(vectorized)[0]  # Get probability scores
         classes = model.classes_
-        top_indices = np.argsort(probs)[::-1][:top_n]
+        top_indices = np.argsort(probs)[::-1][:top_n]  # Get top N predictions
         predictive_text = ", ".join([f"{classes[i]} ({probs[i]*100:.1f}%)" for i in top_indices])
     else:
         predictive_text = pred
 
+    # Get the predicted section and standard text
     predicted_section = violation_to_section.get(pred, "Unknown")
     standard_text = violation_to_standard_text.get(pred, "No sample text available")
 
