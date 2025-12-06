@@ -12,6 +12,9 @@ export default function StudentHome() {
   const [lastVisit, setLastVisit] = useState("—");
   const [visits, setVisits] = useState(0);
 
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [violationHistory, setViolationHistory] = useState([]);
+
   const rawStudent = localStorage.getItem("student");
   let studentData = {};
 
@@ -23,7 +26,8 @@ export default function StudentHome() {
 
   const studentNumber = studentData.student_number || null;
   const fallbackName = studentData.student_name || "Student";
-  
+
+  // ------------------ FETCH STUDENT RECORD ------------------
   useEffect(() => {
     if (!studentNumber) {
       setLoading(false);
@@ -45,6 +49,7 @@ export default function StudentHome() {
       });
   }, [activePage, studentNumber]);
 
+  // ------------------ FETCH SUMMARY ------------------
   useEffect(() => {
     if (!studentNumber) return;
 
@@ -59,7 +64,6 @@ export default function StudentHome() {
         setSection(data.predicted_section ?? "—");
         setLastVisit(data.violation_date ?? "—");
         setVisits(data.visits ?? 0);
-
       } catch (err) {
         console.error("Error fetching summary:", err);
       }
@@ -68,6 +72,20 @@ export default function StudentHome() {
     fetchSummary();
   }, [studentNumber]);
 
+  // ------------------ FETCH FULL VISIT HISTORY ------------------
+  async function openHistoryModal() {
+    try {
+      const res = await fetch(`http://localhost:5000/violations/history/${studentNumber}`);
+      const data = await res.json();
+
+      setViolationHistory(data || []);
+      setHistoryModalOpen(true);
+    } catch (err) {
+      console.error("Error loading history:", err);
+    }
+  }
+
+  // ------------------ LOGOUT ------------------
   function handleLogout() {
     Swal.fire({
       title: "Logout",
@@ -96,8 +114,8 @@ export default function StudentHome() {
 
   return (
     <div className="w-screen h-screen flex bg-gray-100 overflow-hidden">
+      {/* ------------------ SIDEBAR ------------------ */}
       <aside className="w-64 bg-[#1f2937] text-white flex flex-col py-6 shadow-xl border-r border-gray-800">
-        
         <div className="flex items-center gap-3 px-4 mb-8">
           <img
             src="/cvsu-logo.png"
@@ -111,17 +129,15 @@ export default function StudentHome() {
         </div>
 
         <nav className="px-3 flex-1">
-          <div className="flex flex-col space-y-2">
-            <button
-              onClick={() => setActivePage("Info")}
-              className={`flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg transition-all duration-150 ${
-                activePage === "Info" ? "bg-green-600 shadow-inner" : "hover:bg-gray-700/60"
-              }`}
-            >
-              <Squares2X2Icon className="w-5 h-5 text-white" />
-              <span className="font-medium">Student Dashboard</span>
-            </button>
-          </div>
+          <button
+            onClick={() => setActivePage("Info")}
+            className={`flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg transition-all duration-150 ${
+              activePage === "Info" ? "bg-green-600 shadow-inner" : "hover:bg-gray-700/60"
+            }`}
+          >
+            <Squares2X2Icon className="w-5 h-5 text-white" />
+            <span className="font-medium">Student Dashboard</span>
+          </button>
         </nav>
 
         <div className="px-4 mt-auto pb-4">
@@ -135,35 +151,26 @@ export default function StudentHome() {
         </div>
       </aside>
 
+      {/* ------------------ MAIN CONTENT ------------------ */}
       <main className="flex-1 flex flex-col">
-        <header className="w-full h-16 bg-[#1f2937] text-white shadow-md flex items-center justify-between px-6 border-b border-gray-700">
-          <div></div>
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center border border-gray-400 shadow">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="w-6 h-6 text-gray-700"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={1.5}
-              >
-                <path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
-                <path d="M4.5 20.25a8.25 8.25 0 0115 0v.75H4.5v-.75z" />
-              </svg>
-            </div>
-          </div>
-        </header>
+        <header className="w-full h-16 bg-[#1f2937] text-white shadow-md flex items-center justify-between px-6 border-b border-gray-700"></header>
 
         <section className="p-8 overflow-auto h-[calc(100vh-4rem)]">
           <h2 className="text-3xl font-bold text-gray-700 mb-6">
             Welcome, {studentRecord?.student_name || fallbackName}
           </h2>
 
+          {/* ------------------ DASHBOARD CARDS ------------------ */}
           <div className="grid grid-cols-4 gap-6">
-            <div className="p-6 bg-white rounded-xl shadow">
+            
+            {/* CLICKABLE VISITS BOX */}
+            <div
+              className="p-6 bg-white rounded-xl shadow cursor-pointer hover:shadow-lg transition"
+              onClick={openHistoryModal}
+            >
               <h3 className="text-xl font-semibold text-gray-700">Visits</h3>
               <p className="text-3xl font-bold mt-2">{visits}</p>
+              <p className="text-sm text-green-600 mt-1">(Click to view history)</p>
             </div>
 
             <div className="p-6 bg-white rounded-xl shadow">
@@ -180,9 +187,45 @@ export default function StudentHome() {
               <h3 className="text-xl font-semibold text-gray-700">Section</h3>
               <p className="text-3xl font-bold mt-2">{section}</p>
             </div>
+
           </div>
         </section>
       </main>
+
+      {/* ------------------ VISIT HISTORY MODAL ------------------ */}
+      {historyModalOpen && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
+          <div className="w-[550px] bg-white rounded-xl shadow-xl p-6 animate-fadeIn">
+            <h2 className="text-2xl font-bold text-gray-700 mb-4">Visit History</h2>
+
+            <div className="max-h-80 overflow-auto border rounded-lg p-3 bg-gray-50">
+              {violationHistory.length === 0 ? (
+                <p className="text-gray-500 text-center py-6">No visit history found.</p>
+              ) : (
+                violationHistory.map((item, index) => (
+                  <div
+                    key={index}
+                    className="p-3 bg-white rounded-lg shadow mb-3 border border-gray-200"
+                  >
+                    <p className="font-semibold text-gray-800">{item.predicted_violation}</p>
+                    <p className="text-sm text-gray-600">Section: {item.predicted_section}</p>
+                    <p className="text-sm text-gray-600">
+                      Date: {item.violation_date || "—"}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <button
+              onClick={() => setHistoryModalOpen(false)}
+              className="mt-5 w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

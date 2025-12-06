@@ -191,3 +191,31 @@ def get_student_summary(student_number):
         "predicted_section": latest.predicted_section or "—",
         "violation_date": latest.violation_date.strftime("%Y-%m-%d") if latest.violation_date else "—"
     }), 200
+
+# ---------------- FULL HISTORY FOR STUDENT ----------------
+@violation_bp.get("/history/<student_number>")
+def get_student_history(student_number):
+
+    student = Student.query.filter_by(student_number=student_number).first()
+
+    if not student:
+        return jsonify([]), 200
+
+    # Same logic as summary — use student_number as string
+    records = (
+        Violation.query
+        .filter_by(student_id=student.student_number)
+        .order_by(Violation.violation_date.desc())
+        .all()
+    )
+
+    output = []
+    for r in records:
+        output.append({
+            "predicted_violation": r.predicted_violation or "—",
+            "predicted_section": r.predicted_section or "—",
+            "violation_date": r.violation_date.strftime("%Y-%m-%d") if r.violation_date else "—"
+        })
+
+    return jsonify(output), 200
+
