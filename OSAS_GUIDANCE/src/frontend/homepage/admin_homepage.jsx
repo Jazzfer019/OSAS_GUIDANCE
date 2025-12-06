@@ -212,7 +212,7 @@ useEffect(() => {
 useEffect(() => {
     async function fetchUser() {
       try {
-        const res = await fetch("http://localhost:5000/admin/me?id=1"); 
+        const res = await fetch("http://localhost:5000/admin/me?admin_id=1"); 
         if (!res.ok) throw new Error("Failed to fetch user info");
         const data = await res.json();
 
@@ -864,7 +864,7 @@ useEffect(() => {
 
                 const formData = new FormData();
                 formData.append("profile_pic", file);
-                formData.append("id", user.id);
+                formData.append("admin_id", user.id);
 
                 try {
                   const res = await fetch(

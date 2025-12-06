@@ -30,7 +30,7 @@ def admin_login():
     return jsonify({
         "message": "Admin login successful",
         "admin": {
-            "id": admin.id,
+            "admin_id": admin.admin_id,    # ← FIXED
             "email": admin.email,
             "profile_pic": profile_url
         }
@@ -38,15 +38,15 @@ def admin_login():
 
 
 # -------------------------
-# Upload profile pic
+# Upload profile picture
 # -------------------------
 @admin_bp.post("/upload_profile")
 def upload_profile_pic():
-    admin_id = request.form.get("id")
+    admin_id = request.form.get("admin_id")
     file = request.files.get("profile_pic")
 
     if not admin_id or not file:
-        return jsonify({"message": "Missing admin ID or profile_pic file"}), 400
+        return jsonify({"message": "Missing admin_id or profile_pic file"}), 400
 
     admin = Admin.query.get(admin_id)
     if not admin:
@@ -60,7 +60,6 @@ def upload_profile_pic():
     upload_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
     file.save(upload_path)
 
-    # Update DB
     admin.profile_pic = filename
     db.session.commit()
 
@@ -69,7 +68,7 @@ def upload_profile_pic():
 
 
 # -------------------------
-# Serve uploaded files (disable caching)
+# Serve uploaded files
 # -------------------------
 @admin_bp.get("/uploads/<filename>")
 def uploaded_file(filename):
@@ -89,9 +88,9 @@ def uploaded_file(filename):
 # -------------------------
 @admin_bp.get("/me")
 def get_admin_info():
-    admin_id = request.args.get("id")
+    admin_id = request.args.get("admin_id")
     if not admin_id:
-        return jsonify({"message": "Admin ID missing"}), 400
+        return jsonify({"message": "admin_id missing"}), 400
 
     admin = Admin.query.get(admin_id)
     if not admin:
@@ -103,7 +102,7 @@ def get_admin_info():
     )
 
     return jsonify({
-        "id": admin.id,
+        "admin_id": admin.admin_id,      # ← FIXED
         "email": admin.email,
         "name": getattr(admin, 'name', 'Admin'),
         "profile_pic": profile_url

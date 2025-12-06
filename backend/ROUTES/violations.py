@@ -1,4 +1,3 @@
-
 from flask import Blueprint, request, jsonify
 from app import db
 from models import Violation
@@ -8,6 +7,7 @@ import joblib
 import os
 import string
 import numpy as np
+from models import Student
 
 violation_bp = Blueprint("violations", __name__, url_prefix="/violations")
 
@@ -150,3 +150,44 @@ def delete_violation(id):
     db.session.delete(record)
     db.session.commit()
     return jsonify({"message": "Violation deleted successfully"})
+
+
+@violation_bp.get("/summary/<string:student_number>")
+def get_student_summary(student_number):
+
+    print("Fetching summary for student_number:", student_number)
+
+    # Get student using student_number
+    student = Student.query.filter_by(student_number=student_number).first()
+
+    if not student:
+        return jsonify({
+            "visits": 0,
+            "predicted_violation": "—",
+            "predicted_section": "—",
+            "violation_date": "—"
+        }), 200
+
+    # IMPORTANT FIX: Match violation.student_id (which stores student_number)
+    records = Violation.query.filter_by(student_id=student.student_number) \
+    .order_by(Violation.violation_date.desc()).all()
+
+
+    print("Violations found:", records)
+
+    if not records:
+        return jsonify({
+            "visits": 0,
+            "predicted_violation": "—",
+            "predicted_section": "—",
+            "violation_date": "—"
+        }), 200
+
+    latest = records[0]
+
+    return jsonify({
+        "visits": len(records),
+        "predicted_violation": latest.predicted_violation or "—",
+        "predicted_section": latest.predicted_section or "—",
+        "violation_date": latest.violation_date.strftime("%Y-%m-%d") if latest.violation_date else "—"
+    }), 200

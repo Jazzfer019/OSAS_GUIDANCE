@@ -187,3 +187,27 @@ def delete_student(id):
     except Exception as e:
         db.session.rollback()
         return {"message": str(e)}, 500
+
+# ===========================
+# GET STUDENT BY STUDENT NUMBER (NEW ENDPOINT)
+# ===========================
+@student_bp.route("/by-number/<student_number>", methods=["GET"])
+@cross_origin(origin="http://localhost:5173", supports_credentials=True)
+def get_student_by_number(student_number):
+    """
+    GET /students/by-number/<student_number>
+    Returns ONLY the student's name for the dashboard header.
+    """
+    try:
+        student = Student.query.filter_by(student_number=student_number).first()
+
+        if not student:
+            return jsonify({"student_name": None}), 200
+
+        return jsonify({
+            "student_name": student.student_name
+        }), 200
+
+    except Exception as e:
+        print("Error:", e)
+        return jsonify({"student_name": None}), 200

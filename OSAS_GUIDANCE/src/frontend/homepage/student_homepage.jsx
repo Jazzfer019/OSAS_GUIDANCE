@@ -1,43 +1,72 @@
 import React, { useState, useEffect } from "react";
-import {
-  DocumentTextIcon,
-  ChatBubbleBottomCenterTextIcon,
-  NewspaperIcon,
-  ArrowRightOnRectangleIcon,
-  MagnifyingGlassIcon,
-  EyeIcon,
-} from "@heroicons/react/24/solid";
+import { Squares2X2Icon, ArrowRightOnRectangleIcon } from "@heroicons/react/24/solid";
 import Swal from "sweetalert2";
 
 export default function StudentHome() {
-  const [activePage, setActivePage] = useState("records");
-  const [query, setQuery] = useState("");
-  const [students, setStudents] = useState([]);
+  const [activePage, setActivePage] = useState("Info");
+  const [studentRecord, setStudentRecord] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const menuItems = [
-    { id: "records", label: "Records", icon: DocumentTextIcon },
-    { id: "news", label: "News", icon: NewspaperIcon },
-    { id: "chat", label: "Chat", icon: ChatBubbleBottomCenterTextIcon },
-    { id: "pdf", label: "PDF", icon: DocumentTextIcon },
-  ];
+  const [violation, setViolation] = useState("—");
+  const [section, setSection] = useState("—");
+  const [lastVisit, setLastVisit] = useState("—");
+  const [visits, setVisits] = useState(0);
 
-  // Fetch student records from backend
+  const rawStudent = localStorage.getItem("student");
+  let studentData = {};
+
+  try {
+    studentData = rawStudent ? JSON.parse(rawStudent) : {};
+  } catch {
+    studentData = {};
+  }
+
+  const studentNumber = studentData.student_number || null;
+  const fallbackName = studentData.student_name || "Student";
+  
   useEffect(() => {
-    if (activePage === "records") {
-      setLoading(true);
-      fetch("http://localhost:5000/student_records") // adjust endpoint
-        .then((res) => res.json())
-        .then((data) => {
-          setStudents(data.records || []);
-          setLoading(false);
-        })
-        .catch((err) => {
-          console.error(err);
-          setLoading(false);
-        });
+    if (!studentNumber) {
+      setLoading(false);
+      return;
     }
-  }, [activePage]);
+    if (activePage !== "Info") return;
+
+    setLoading(true);
+
+    fetch(`http://localhost:5000/students/by-number/${studentNumber}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setStudentRecord(data || {});
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Error fetching student:", err);
+        setLoading(false);
+      });
+  }, [activePage, studentNumber]);
+
+  useEffect(() => {
+    if (!studentNumber) return;
+
+    async function fetchSummary() {
+      try {
+        const res = await fetch(`http://localhost:5000/violations/summary/${studentNumber}`);
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+
+        const data = await res.json();
+
+        setViolation(data.predicted_violation ?? "—");
+        setSection(data.predicted_section ?? "—");
+        setLastVisit(data.violation_date ?? "—");
+        setVisits(data.visits ?? 0);
+
+      } catch (err) {
+        console.error("Error fetching summary:", err);
+      }
+    }
+
+    fetchSummary();
+  }, [studentNumber]);
 
   function handleLogout() {
     Swal.fire({
@@ -49,7 +78,6 @@ export default function StudentHome() {
       cancelButtonText: "Cancel",
       confirmButtonColor: "#16a34a",
       cancelButtonColor: "#d33",
-      reverseButtons: false,
     }).then((result) => {
       if (result.isConfirmed) {
         Swal.fire({
@@ -59,6 +87,7 @@ export default function StudentHome() {
           timer: 1200,
           showConfirmButton: false,
         }).then(() => {
+          localStorage.removeItem("student");
           window.location.href = "/";
         });
       }
@@ -67,9 +96,8 @@ export default function StudentHome() {
 
   return (
     <div className="w-screen h-screen flex bg-gray-100 overflow-hidden">
-      {/* ================= SIDEBAR ================= */}
       <aside className="w-64 bg-[#1f2937] text-white flex flex-col py-6 shadow-xl border-r border-gray-800">
-        {/* Logo + Title */}
+        
         <div className="flex items-center gap-3 px-4 mb-8">
           <img
             src="/cvsu-logo.png"
@@ -82,27 +110,20 @@ export default function StudentHome() {
           </div>
         </div>
 
-        {/* Nav */}
         <nav className="px-3 flex-1">
           <div className="flex flex-col space-y-2">
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActivePage(item.id)}
-                  className={`flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg transition-all duration-150
-                    ${activePage === item.id ? "bg-green-600 shadow-inner" : "hover:bg-gray-700/60"}`}
-                >
-                  <Icon className="w-5 h-5 text-white" />
-                  <span className="font-medium">{item.label}</span>
-                </button>
-              );
-            })}
+            <button
+              onClick={() => setActivePage("Info")}
+              className={`flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg transition-all duration-150 ${
+                activePage === "Info" ? "bg-green-600 shadow-inner" : "hover:bg-gray-700/60"
+              }`}
+            >
+              <Squares2X2Icon className="w-5 h-5 text-white" />
+              <span className="font-medium">Student Dashboard</span>
+            </button>
           </div>
         </nav>
 
-        {/* Logout */}
         <div className="px-4 mt-auto pb-4">
           <button
             onClick={handleLogout}
@@ -114,29 +135,11 @@ export default function StudentHome() {
         </div>
       </aside>
 
-      {/* ================= MAIN ================= */}
       <main className="flex-1 flex flex-col">
-        {/* Topbar */}
-        <header className="w-full h-16 bg-[#1f2937] text-white shadow-md flex items-center justify-between px-6 sticky top-0 z-20 border-b border-gray-700">
+        <header className="w-full h-16 bg-[#1f2937] text-white shadow-md flex items-center justify-between px-6 border-b border-gray-700">
           <div></div>
           <div className="flex items-center gap-4">
-            <div className="relative w-80">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                <MagnifyingGlassIcon className="w-5 h-5" />
-              </span>
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search files, records, students..."
-                className="w-full pl-11 pr-4 py-2 bg-white text-gray-800 border border-gray-300 rounded-full shadow-sm 
-                    focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
-              />
-            </div>
-            <div
-              role="img"
-              aria-label="admin avatar"
-              className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center border border-gray-400 shadow"
-            >
+            <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center border border-gray-400 shadow">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 className="w-6 h-6 text-gray-700"
@@ -145,74 +148,39 @@ export default function StudentHome() {
                 stroke="currentColor"
                 strokeWidth={1.5}
               >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 20.25a8.25 8.25 0 0115 0v.75H4.5v-.75z" />
+                <path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+                <path d="M4.5 20.25a8.25 8.25 0 0115 0v.75H4.5v-.75z" />
               </svg>
             </div>
           </div>
         </header>
 
-        {/* Content area */}
         <section className="p-8 overflow-auto h-[calc(100vh-4rem)]">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-3xl font-bold text-gray-700">
-              {activePage === "records" && "Student Records"}
-              {activePage === "news" && "Latest News"}
-              {activePage === "chat" && "Chat Support"}
-              {activePage === "pdf" && "PDF Files"}
-            </h2>
-          </div>
+          <h2 className="text-3xl font-bold text-gray-700 mb-6">
+            Welcome, {studentRecord?.student_name || fallbackName}
+          </h2>
 
-          {/* ================= STUDENT RECORDS TABLE ================= */}
-          {activePage === "records" && (
-            <div className="overflow-x-auto border rounded bg-white shadow p-4">
-              <table className="min-w-full text-left">
-                <thead className="bg-gray-200">
-                  <tr>
-                    <th className="px-4 py-2">ID</th>
-                    <th className="px-4 py-2">Name</th>
-                    <th className="px-4 py-2">Student Number</th>
-                    <th className="px-4 py-2">Email</th>
-                    <th className="px-4 py-2">Phone</th>
-                    <th className="px-4 py-2">Course</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr>
-                      <td colSpan={6} className="text-center p-4">
-                        Loading...
-                      </td>
-                    </tr>
-                  ) : students.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="text-center p-4">
-                        No records found.
-                      </td>
-                    </tr>
-                  ) : (
-                    students
-                      .filter((s) =>
-                        query
-                          ? s.student_name.toLowerCase().includes(query.toLowerCase()) ||
-                            (s.student_number && s.student_number.includes(query))
-                          : true
-                      )
-                      .map((s) => (
-                        <tr key={s.record_id} className="border-b">
-                          <td className="px-4 py-2">{s.record_id}</td>
-                          <td className="px-4 py-2">{s.student_name}</td>
-                          <td className="px-4 py-2">{s.student_number}</td>
-                          <td className="px-4 py-2">{s.email}</td>
-                          <td className="px-4 py-2">{s.phone}</td>
-                          <td className="px-4 py-2">{s.course}</td>
-                        </tr>
-                      ))
-                  )}
-                </tbody>
-              </table>
+          <div className="grid grid-cols-4 gap-6">
+            <div className="p-6 bg-white rounded-xl shadow">
+              <h3 className="text-xl font-semibold text-gray-700">Visits</h3>
+              <p className="text-3xl font-bold mt-2">{visits}</p>
             </div>
-          )}
+
+            <div className="p-6 bg-white rounded-xl shadow">
+              <h3 className="text-xl font-semibold text-gray-700">Last Visit</h3>
+              <p className="text-3xl font-bold mt-2">{lastVisit}</p>
+            </div>
+
+            <div className="p-6 bg-white rounded-xl shadow">
+              <h3 className="text-xl font-semibold text-gray-700">Violation</h3>
+              <p className="text-3xl font-bold mt-2">{violation}</p>
+            </div>
+
+            <div className="p-6 bg-white rounded-xl shadow">
+              <h3 className="text-xl font-semibold text-gray-700">Section</h3>
+              <p className="text-3xl font-bold mt-2">{section}</p>
+            </div>
+          </div>
         </section>
       </main>
     </div>
