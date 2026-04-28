@@ -173,7 +173,7 @@ def create_app():
                 "standard_text": "invalid input (Invalid Format detected)"
             })
 
-        if len(text_proc.split()) < 3:
+        if len(text_proc.split()) < 2:
             return jsonify({
                 "input": text,
                 "predicted_violation": "unknown",
