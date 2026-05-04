@@ -3053,6 +3053,7 @@ return (
                                   new Paragraph(`Student ID: ${v.student_id}`),
                                   new Paragraph(`Course/Year/Section: ${v.course_year_section}`),
                                   new Paragraph(`Gender: ${v.gender}`),
+                                  new Paragraph(`Semester: ${v.semester || "—"}`),
                                   new Paragraph(`Violation: ${v.predicted_violation || "—"}`),
                                   new Paragraph(`Section: ${v.predicted_section || "—"}`),
                                   new Paragraph(`Admin Note: ${v.violation_text || "—"}`),
@@ -3542,7 +3543,6 @@ setShowViolationDetailsModal(false);
                 new Paragraph(`Course/Year/Section: ${v.course_year_section}`),
                 new Paragraph(`Gender: ${v.gender}`),
                 new Paragraph(`Semester: ${v.semester || "—"}`),
-
                 new Paragraph(`Violation: ${v.predicted_violation}`),
                 new Paragraph(`Section: ${v.predicted_section}`),
                 new Paragraph(`Admin Note: ${v.violation_text}`),
