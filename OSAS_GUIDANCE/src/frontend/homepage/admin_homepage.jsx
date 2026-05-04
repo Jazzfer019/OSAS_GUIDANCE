@@ -4111,6 +4111,7 @@ setShowViolationDetailsModal(false);
                               >
                                 View
                               </button>
+                              
 
                               <button
                                 className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700"
