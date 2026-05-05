@@ -3,22 +3,18 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-
-  "engines": {
-    "node": "20.x"
-  },
-
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
-
   "dependencies": {
     "@heroicons/react": "^2.2.0",
     "axios": "^1.13.2",
+    "cors": "^2.8.5",
     "docx": "^9.5.1",
+    "express": "^5.1.0",
     "file-saver": "^2.0.5",
     "html2pdf.js": "^0.10.1",
     "latest": "^0.2.0",
@@ -31,7 +27,6 @@
     "sweetalert2": "^11.26.3",
     "xml2js": "^0.6.2"
   },
-
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@types/react": "^19.2.2",
